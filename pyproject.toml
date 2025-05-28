@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "woundcomputegui"
+version = "0.0.0"
+authors = [
+  { name="Quan Nguyen", email="quan@bu.edu" },
+]
+description = "woundcompute gui"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "woundcompute @ git+https://github.com/elejeune11/woundcompute.git",
+    "pandas",
+    "humanfriendly",
+    "openpyxl",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/quan4444/woundcomputeGUI"
+"Bug Tracker" = "https://github.com/quan4444/woundcomputeGUI/issues"
