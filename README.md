@@ -14,9 +14,19 @@ UNDER CONSTRUCTION
 
 ## Installation Instructions <a name="install"></a>
 
+### Install git on your system
+
+First, check if you already have git installed by running:
+```bash
+git --version
+```
+
+If a git version pops up, you can skip to the next step "Get a copy of the Wound Compute GUI repository on your local machine". Otherwise, please install git following [this instruction](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+
+
 ### Get a copy of the Wound Compute GUI repository on your local machine
 
-The best way to do this is to create a GitHub account and ``clone`` the repository. However, you can also download the repository by clicking the ``Code`` button and selecting ``Download ZIP``. Downloaded and unzip the ``woundcomputeGUI-main`` folder and place it in a convenient location on your computer.
+The best way to do this is to create a GitHub account and ``git clone`` the repository. However, you can also download the repository by clicking the ``Code`` button and selecting ``Download ZIP``. Downloaded and unzip the ``woundcomputeGUI-main`` folder and place it in a convenient location on your computer.
 
 ### Create and activate a conda virtual environment
 
@@ -36,7 +46,7 @@ python --version
 ```
 6. Update some base modules (just in case)
 ```bash
-pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip setuptools wheel
 ```
 
 Note that once you have created this virtual environment you can ``activate`` and ``deactivate`` it in the future -- it is not necessary to create a new virtual environment each time you want to run this code, you can simply type ``conda activate wound-compute-gui`` and then pick up where you left off (see also: [conda cheat sheet](https://docs.conda.io/projects/conda/en/4.6.0/_downloads/52a95608c49671267e40c689e0bc00ca/conda-cheatsheet.pdf)).
@@ -47,6 +57,6 @@ Note that once you have created this virtual environment you can ``activate`` an
 2. Type the command ``ls`` and make sure that the file ``pyproject.toml`` is in the current directory.
 3. Now, create an editable install of wound compute:
 ```bash
-pip install -e .
+python -m pip install -e .
 ```
 4. If you would like to see what packages this has installed, you can type ``pip list``

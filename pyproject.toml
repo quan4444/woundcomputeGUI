@@ -23,6 +23,8 @@ dependencies = [
     "pandas",
     "humanfriendly",
     "openpyxl",
+    "psutil",
+    "pyqt",
 ]
 
 [project.urls]
