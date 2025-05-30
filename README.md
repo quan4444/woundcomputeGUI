@@ -4,12 +4,20 @@
 ## Table of Contents
 * [Package Summary](#summary)
 * [Installation Instructions](#install)
-* [Tutorial](#tutorial)
-
+* [Data Organization](#organize)
+* [Tutorial: Full run from raw data](#tutorialfull)
+* [Software Outputs](#outputs)
 
 ## Package Summary <a name="summary"></a>
 
-UNDER CONSTRUCTION
+
+This package provides a **Graphical User Interface (GUI)** for **WoundCompute**, making the software easier to use for non-coders. For a full description of WoundCompute, see the [main repository](https://github.com/elejeune11/woundcompute).
+
+This page includes:
+- **Installation instructions**
+- **A tutorial** on how to run the package
+
+The GUI is designed to simplify interaction with WoundCompute while keeping all its core features.
 
 
 ## Installation Instructions <a name="install"></a>
@@ -60,3 +68,65 @@ Note that once you have created this virtual environment you can ``activate`` an
 python -m pip install -e .
 ```
 4. If you would like to see what packages this has installed, you can type ``pip list``
+
+## Data Organization <a name="organize"></a>
+
+Before running Wound Compute, your raw data and the corresponding ``.nd`` file should be organized as below:
+
+<p align = "center">
+<img alt="raw_data_folder" src="figures_for_readme/raw_data_folder.png" width="75%" />
+</p>
+
+In this example, ``tissue_ai_*.TIF`` files are the raw data, with ``tissue_ai_`` as the base name of the experiment, ``s*`` as the sample number, and ``t*`` as the time frame. ``tissue_ai.nd`` is the metadata file for the microscopy.
+
+## Tutorial: Full run from raw data <a name="tutorialfull"></a>
+
+To use Wound Compute, first, we activate the Wound Compute GUI environment:
+```bash
+conda activate wound-compute-gui
+```
+
+Before running, let's make sure we're in the correct folder by typing ``ls`` and check for the file ``run_wound_compute_gui.py``. Then, we can start the software with ``python run_wound_compute_gui.py``. In terminal, these commands will look like:
+
+<p align = "center">
+<img alt="start_gui" src="figures_for_readme/start_gui.png" width="75%" />
+</p>
+
+A window should pop up, where we can select our folder with the raw data and a ``.nd`` file (e.g., test_data in our case). The only current ``Microscope Type`` supported is ``General``. The imaging inteval is the time between frame when taking pictures of the experiments. If running from raw data, we recommend selecting all 3 options available as check boxes:
+
+<p align = "center">
+<img alt="wc_gui_initial" src="figures_for_readme/wc_gui_initial.png" width="75%" />
+</p>
+
+After selecting ``Run``, another window will pop up and prompt the user to name the output folder. Here, we call that folder ``Sorted``:
+<p align = "center">
+<img alt="name_sorted_folder" src="figures_for_readme/name_sorted_folder.png" width="75%" />
+</p>
+
+After selecting ``OK``, the program will take some time to analyze the data. The run time is dependent upon the size and number of images. At the end of the run, a Well Plate window will pop up:
+
+<p align = "center">
+<img alt="wellplate_initial" src="figures_for_readme/wellplate_initial.png" width="100%" />
+</p>
+
+In this screen, we can select the well(s) in the experiment, and assign conditions to them. Specifically, we can first select the number of conditions, and name the conditions. Then, we can click on the corresponding well, and ``Assign Condition`` to that well. After assigning all conditions to wells, we can select ``Finish Assignment``. Here is an example:
+
+<p align = "center">
+<img alt="wellplate_filled" src="figures_for_readme/wellplate_filled.png" width="100%" />
+</p>
+
+This is the final step of the software.
+
+## Software Outputs <a name="outputs"></a>
+
+After processing the data, a folder with your specified name (e.g., Sorted) shows up and contains all the output files. The folder structure looks like:
+
+<p align = "center">
+<img alt="output_folder" src="figures_for_readme/output_folder.png" width="75%" />
+</p>
+
+Here are the descriptions of the output files:
+- ``basename_list.yaml`` contains the list of base names corresponding to the name of the experiments.
+- ``code_output_*.xlsx`` contains all the analysis information (i.e., wound area, wound closure status, tissue integrity, pillar positions, relative pillar distances, relative pillar distances smoothed by GPR).
+- Folders named with base names. In this example, ``tissue_ai`` folder contains the data for each sample in an experiment. In each sample folder, there are 3 subfolders - ``ph1_images`` with all the original images, ``segment_ph1`` with all the analysis data related to tissue and wound segmentation, ``track_pillars_ph1`` with the pillar positions and tracking information. 
+- ``visualize_all_samples`` contains all segmented wound images in the same image, for each sample.
