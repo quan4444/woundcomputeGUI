@@ -1,5 +1,4 @@
 import sys
-sys.path.insert(1, '/projectnb/lejlab2/quan/wound_compute_GUI/woundcomputeGUI/src')
 import woundcomputegui.main_gui as mg
 
 # Main function to run the application

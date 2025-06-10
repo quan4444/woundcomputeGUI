@@ -24,7 +24,7 @@ dependencies = [
     "humanfriendly",
     "openpyxl",
     "psutil",
-    "pyqt",
+    "PyQt5",
 ]
 
 [project.urls]

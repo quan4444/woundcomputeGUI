@@ -7,6 +7,8 @@
 * [Data Organization](#organize)
 * [Tutorial: Full run from raw data](#tutorialfull)
 * [Software Outputs](#outputs)
+* [Important Notes](#notes)
+* [Contacts](#contacts)
 
 ## Package Summary <a name="summary"></a>
 
@@ -130,3 +132,11 @@ Here are the descriptions of the output files:
 - ``code_output_*.xlsx`` contains all the analysis information (i.e., wound area, wound closure status, tissue integrity, pillar positions, relative pillar distances, relative pillar distances smoothed by GPR).
 - Folders named with base names. In this example, ``tissue_ai`` folder contains the data for each sample in an experiment. In each sample folder, there are 3 subfolders - ``ph1_images`` with all the original images, ``segment_ph1`` with all the analysis data related to tissue and wound segmentation, ``track_pillars_ph1`` with the pillar positions and tracking information. 
 - ``visualize_all_samples`` contains all segmented wound images in the same image, for each sample.
+
+## Important Notes <a name="notes"></a>
+
+1. When processing tissues that are not injured (i.e., no wound region in the middle), please include the term ``_bi`` in your file names. For example, if you call your experimental images ``example_tissue_t*.TIF``, where ``t*`` contains the frame number, please relabel these images to ``example_tissue_bi_t*.TIF``. As long as ``_bi`` is included in your file name, the data will be processed correctly.
+
+## Contacts <a name="contacts"></a>
+
+If you run into any issues related to the GUI, please [create an issue on GitHub](https://github.com/quan4444/woundcomputeGUI/issues).
