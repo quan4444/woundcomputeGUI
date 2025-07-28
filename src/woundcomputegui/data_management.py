@@ -224,12 +224,10 @@ def visualize_data(path_output_in, basename_in, image_type_in, all_data_in, metr
 
         for position in positions_in:
             pattern = re.compile(r'([A-H]\d{2})')
-            print(position)
             pos2 = pattern.search(position)
             if pos2 is not None:
                 pos2 = pos2.group()
 
-            print(pos2)
             condition_info = assigned_df_in[assigned_df_in['Well'] == pos2]
             if condition_info.empty:
                 print(f"Condition info is empty for {position}")
@@ -245,9 +243,7 @@ def visualize_data(path_output_in, basename_in, image_type_in, all_data_in, metr
         # Plot data for each condition
         plt.figure(figsize=(10, 6))
         for condition_name, data_list in grouped_data.items():
-            print(data_list)
             data_array = pd.concat(data_list, axis=1)
-            print(data_array)
             mean = data_array.mean(axis=1)
             std = data_array.std(axis=1)
 

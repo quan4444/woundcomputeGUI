@@ -163,8 +163,8 @@ class MyWindow(QMainWindow):
         # Call the corresponding methods based on checkbox selections
         if self.check_organize.isChecked():
             self.organize_files(path_input)
-            print(f'basename_list={self.basename_list}')
-            print(f'path_output={self.path_output}')
+            # print(f'basename_list={self.basename_list}')
+            # print(f'path_output={self.path_output}')
         else:
             self.obtain_organized_files(path_input)
 
@@ -224,7 +224,7 @@ class MyWindow(QMainWindow):
             basename_list, path_output, is_nd, ms_choice=self.microscope_type
         )
         print("\tExtracted stage position information")
-        print(f"\t{stage_pos_maps}")
+        # print(f"\t{stage_pos_maps}")
         # import sys
         # sys.exit("Exit code bc testing")
         
