@@ -20,7 +20,6 @@ from PyQt5.QtCore import Qt
 from pathlib import Path
 from humanfriendly import format_timespan
 from PIL import Image
-sys.path.insert(1, '/projectnb/lejlab2/quan/wound_compute_GUI/woundcomputeGUI/src')
 import woundcomputegui.wc_functions as wcf
 import woundcomputegui.wellplate_gui as wpg
 import woundcomputegui.data_management as dm
