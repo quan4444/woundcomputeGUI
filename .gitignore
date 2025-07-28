@@ -1,1 +1,9 @@
 ./data_test_delete_after/
+src/woundcomputegui/__pycache__/data_management.cpython-39.pyc
+src/woundcomputegui/__pycache__/main_gui.cpython-36.pyc
+src/woundcomputegui/__pycache__/main_gui.cpython-39.pyc
+src/woundcomputegui.egg-info/PKG-INFO
+src/woundcomputegui/__pycache__/wc_functions.cpython-39.pyc
+src/woundcomputegui/__pycache__/wellplate_gui.cpython-39.pyc
+dist/woundcomputegui-0.0.0-py3-none-any.whl
+dist/woundcomputegui-0.0.0.tar.gz
