@@ -1,9 +1,10 @@
-import sys
 import os
 import io
 import time
 import yaml
 import glob
+import logging
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,6 +24,432 @@ from PIL import Image
 import woundcomputegui.wc_functions as wcf
 import woundcomputegui.wellplate_gui as wpg
 import woundcomputegui.data_management as dm
+
+
+# Capture all warnings and log them in a .txt file
+logging.basicConfig(
+    filename='warnings.txt',          # Output file
+    level=logging.WARNING,            # Capture warnings and above
+    format='%(asctime)s - %(levelname)s - %(message)s'  # Optional formatting
+)
+# Override warnings.showwarning to use logging
+warnings.showwarning = lambda message, category, filename, lineno, file=None, line=None: \
+    logging.warning(f"{filename}:{lineno} - {category.__name__}: {message}")
+
+
+class MyWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Wound Compute")
+        self.setGeometry(100, 100, 540, 250)
+        self.overlay = None
+        self.basename_list = None
+        self.path_output = None
+        self.stage_pos_maps = None
+        
+        # Central widget for the main window
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        # Main vertical layout
+        main_layout = QVBoxLayout()
+
+        # 1. Directory Input with Browse Button
+#         main_layout.addWidget(QLabel("Please select the appropriate folder:"))
+
+        dir_layout = QHBoxLayout()
+        self.dir_input = QLineEdit()
+        self.dir_input.setPlaceholderText("Enter folder path or browse...")
+        self.browse_button = QPushButton("Browse")
+        self.browse_button.clicked.connect(self.browse_folder)
+        
+        dir_layout.addWidget(QLabel("Directory with .TIF files:"))
+        dir_layout.addWidget(self.dir_input)
+        dir_layout.addWidget(self.browse_button)
+        main_layout.addLayout(dir_layout)
+
+        # Use a form layout for other widgets
+        form_layout = QFormLayout()
+
+        # 2. Drop-down list (ComboBox) with description
+        self.microscope_type = QComboBox()
+        self.microscope_type.addItems(["General"]) # "Cytation" is under construction
+        form_layout.addRow(QLabel("Microscope type:"), self.microscope_type)
+
+        # 3. Slider (QSlider) with description and a value display
+        slider_layout = QHBoxLayout()
+        self.max_cpu_usage_percent = QSlider(Qt.Horizontal)
+        self.max_cpu_usage_percent.setRange(1, 100)
+        self.max_cpu_usage_percent.setValue(80)  # Default value
+        self.max_cpu_usage_percent.setFixedWidth(320)
+        self.max_cpu_usage_percent.setToolTip("Set the maximum CPU usage percentage")
+        
+        self.slider_label = QLabel(f"{self.max_cpu_usage_percent.value()}%")
+        self.max_cpu_usage_percent.valueChanged.connect(self.update_slider_label)
+
+        slider_layout.addWidget(self.max_cpu_usage_percent)
+        slider_layout.addWidget(self.slider_label)
+        form_layout.addRow(QLabel("Max CPU % usage:"), slider_layout)
+
+        # Add form layout to the main layout
+        main_layout.addLayout(form_layout)
+
+        # 4. Imaging Interval input
+        self.imaging_interval = QDoubleSpinBox()
+        self.imaging_interval.setRange(0.01, 1000.0)  # Set a reasonable range
+        self.imaging_interval.setValue(0.50)  # Default value
+        self.imaging_interval.setSingleStep(0.1)  # Step size for arrow keys
+        self.imaging_interval.setDecimals(2)  # Show 2 decimal places
+        self.imaging_interval.setSuffix(" hours")  # Add units
+        form_layout.addRow(QLabel("Imaging Interval (hours):"), self.imaging_interval)
+
+        # 5. Four Checkboxes (QCheckBox)
+        self.check_organize = QCheckBox("Organize .tif files and prepare .yaml files")
+        self.check_run_wc = QCheckBox("Run Wound Compute in parallel")
+        self.check_extract_data = QCheckBox("Extract metadata")
+        # self.check_visualize = QCheckBox("Visualize data")
+
+        main_layout.addWidget(self.check_organize)
+        main_layout.addWidget(self.check_run_wc)
+        main_layout.addWidget(self.check_extract_data)
+        # main_layout.addWidget(self.check_visualize)
+
+        # 6. Run and Exit Buttons
+        button_layout = QHBoxLayout()
+
+        self.run_button = QPushButton("Run")
+        self.run_button.clicked.connect(self.run_process)
+        button_layout.addWidget(self.run_button)
+
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.clicked.connect(self.close_app)
+        button_layout.addWidget(self.exit_button)
+
+        main_layout.addLayout(button_layout)
+
+        # 7. Status Message
+        self.status_label = QLabel("Ready")
+        main_layout.addWidget(self.status_label)
+
+        # Set the main layout to the central widget
+        central_widget.setLayout(main_layout)
+
+    def browse_folder(self):
+        """Open a dialog to browse and select a folder."""
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
+        if folder_path:
+            self.dir_input.setText(folder_path)
+
+    def update_slider_label(self):
+        """Update the label next to the slider to show its current value."""
+        self.slider_label.setText(f"{self.max_cpu_usage_percent.value()}%")
+
+    def run_process(self):
+        """Run the main processing based on user selections."""
+        self.show_overlay()
+
+        path_input = self.dir_input.text()
+
+        # Check if the directory is provided
+        if not path_input:
+            QMessageBox.warning(self, "Warning", "Please select a directory!")
+            return
+        else:
+            path_input = Path(path_input)
+
+        self.status_label.setText("Processing...")
+        QApplication.processEvents()  # Update the UI immediately
+
+        # Call the corresponding methods based on checkbox selections
+        if self.check_organize.isChecked():
+            self.organize_files(path_input)
+            print(f'basename_list={self.basename_list}')
+            print(f'path_output={self.path_output}')
+        else:
+            self.obtain_organized_files(path_input)
+
+
+        if self.check_run_wc.isChecked():
+            self.run_wound_compute()
+        elif self.check_extract_data.isChecked(): #  or self.check_visualize.isChecked()
+            self.check_for_segmentation(self.path_output, self.basename_list[0])
+
+        if self.check_extract_data.isChecked():
+            self.extract_metadata()
+
+        # if self.check_visualize.isChecked():
+        #     self.visualize_data()
+
+        self.status_label.setText("Done!")
+        self.hide_overlay()
+
+    def organize_files(self,path_input:str,image_type:str='ph1'):
+        """Organize .tif files and prepare .yaml files."""
+        print("Organizing .tif files and preparing .yaml files...")
+
+        # Create new folder for sorted files
+        path_output = self.create_new_folder(path_input)
+        
+        # Create yaml file for image type
+        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True)
+#         print("\tCreated .yaml file")
+
+        basename_list, is_nd = wcf.define_basename_list(
+            path_input, path_output,self.microscope_type
+        )
+        print("\tBasename list:", basename_list)
+        print("\t.nd file found:", is_nd)
+
+        # Sort images in input folder into Sorted/basename/ folders
+        print("\tSorting images into corresponding basename folders...")
+        wcf.sort_basename_folders(basename_list, path_input, path_output, self.microscope_type)
+        print("\tDone!")
+        
+        # # Check if the .nd file is found
+        # if not is_nd:
+        #     # Show a pop-up warning that the .nd file is missing
+        #     msg_box = QMessageBox()
+        #     msg_box.setIcon(QMessageBox.Warning)
+        #     msg_box.setText("No .nd file found in the selected directory!")
+        #     msg_box.setInformativeText("The program cannot proceed without the .nd file. Please ensure the file is present.")
+        #     msg_box.setWindowTitle("Missing .nd File")
+        #     msg_box.setStandardButtons(QMessageBox.Ok)
+
+        #     # Connect the "Ok" button to close the application
+        #     msg_box.buttonClicked.connect(self.close_app)
+        #     msg_box.exec_()
+        
+        # Extract stage position information from .nd file or from data in folder
+        stage_pos_maps = wcf.extract_nd_info(
+            basename_list, path_output, is_nd, ms_choice=self.microscope_type
+        )
+        print("\tExtracted stage position information")
+        print(f"\t{stage_pos_maps}")
+        # import sys
+        # sys.exit("Exit code bc testing")
+        
+        #  Sort images in each basename folder into their corresponding stage position folders
+        print("\tSorting images in each basename folder into their corresponding stage position folders...")
+        wcf.efficient_sort_stage_pos(
+            basename_list, path_output, stage_pos_maps, image_type, self.microscope_type, is_nd
+        )
+        print("\tDone organizing .tif files and preparing .yaml files!")
+        self.basename_list = basename_list
+        self.path_output = path_output
+        self.stage_pos_maps = stage_pos_maps
+
+
+    def create_new_folder(self,path_input:str)->str:
+        """Create new folder to sort files."""
+        while True:
+            # Prompt the user for a new folder name
+            folder_name, ok = QInputDialog.getText(
+                self, "New Folder Name","Enter a name for the new sorted folder:")
+
+            # Check if the user pressed "OK" and provided a name
+            if not ok:
+                # User canceled the dialog, exit the function
+                return
+
+            folder_name = folder_name.strip()
+            if not folder_name:
+                QMessageBox.warning(self, "Warning", "Folder name cannot be empty!")
+                continue
+
+            # Create the full path for the new folder
+            new_folder_path = os.path.join(path_input, folder_name)
+
+            # Check if the folder already exists
+            if os.path.exists(new_folder_path):
+                QMessageBox.warning(self, "Warning", f"Folder '{folder_name}' already exists! Please enter a new name.")
+            else:
+                # Create the new folder if it doesn't exist
+                try:
+                    os.makedirs(new_folder_path)
+#                     QMessageBox.information(self, "Success", f"Folder '{folder_name}' created successfully!")
+                    return new_folder_path
+#                     break  # Exit the loop since the folder was successfully created
+                except Exception as e:
+                    QMessageBox.critical(self, "Error", f"Failed to create folder: {e}")
+                    self.status_label.setText("Ready")
+                    self.hide_overlay()
+                    return
+
+
+    def obtain_organized_files(self,path_input:str):
+        
+        # Prompt user to select the folder with organized data
+        QMessageBox.information(
+            self,"Note",
+            "The 'Organized .tif files and prepare .yaml files' button was not checked. This indicates that the .tif files are sorted and .yaml files are prepared. Please select the location of the sorted folder. Thanks!",
+        )
+        organized_folder = QFileDialog.getExistingDirectory(self, "Select Folder with Organized Data")
+        if not organized_folder:
+            QMessageBox.warning(self, "Warning", "No folder selected. Process cancelled.")
+            self.status_label.setText("Ready")
+            return
+        path_output = Path(organized_folder)
+        
+        all_folders_in_path = set([os.path.dirname(p) for p in glob.glob(organized_folder)])
+        if not all_folders_in_path:
+            QMessageBox.warning(self, "Warning", "No sorted folders found. Process cancelled.")
+        
+        file_list = os.listdir(path_output)
+        if "basename_list.yaml" in file_list:
+            print("\tFound basename_list.yaml file in the input folder")
+            with open(os.path.join(path_output, 'basename_list.yaml'), 'r') as file:
+                # Load the YAML content
+                basename_list = yaml.safe_load(file)
+        else:
+            # If basename.yaml file is not found, then get the list of folders in the input folder
+            # and set it as the basename list
+            basename_list = os.listdir(path_output)
+            basename_list = [name for name in basename_list if os.path.isdir(os.path.join(path_output, name))]
+            if not basename_list:
+                QMessageBox.warning(self,"Warning","No sorted directory found. Process cancelled.")
+
+        if "stage_positions.yaml" in file_list:
+            print("\tFound stage_positions.yaml file in the input folder")
+            with open(os.path.join(path_output, 'stage_positions.yaml'), 'r') as file:
+                # Load the YAML content
+                data = yaml.safe_load(file)
+            stage_pos_maps = {}
+            for index, basename in enumerate(basename_list):
+                stage_pos_maps[basename] = data[basename]
+        else:
+            # If stage_positions.yaml file is not found, then get the list of folders in the basename folder
+            # and set it as the stage_pos_maps
+            stage_pos_maps = {}
+            for index, basename in enumerate(basename_list):
+                path_temp = os.path.join(path_output, Path(basename))
+                try:
+                    positions = os.listdir(path_temp)
+                    positions.sort()
+                    positions = [n1 for n1 in positions if not n1.endswith('.nd')]
+                    stage_pos_maps[basename] = {N: position for N, position in zip(range(1, len(positions) + 1), positions)}
+                    print(f"\tFound {len(positions)} stage positions for {basename}.")
+                except FileNotFoundError:
+                    print(f"\tNo folder found for {basename}. Skipping...")
+                    continue
+        self.basename_list = basename_list
+        self.path_output = path_output
+        self.stage_pos_maps = stage_pos_maps
+
+            
+    def run_wound_compute(self):
+        """Run Wound Compute in parallel."""
+        print("Running Wound Compute...")
+        basename_list = self.basename_list
+        path_output = self.path_output
+
+        time_start = time.time()
+        print("\tStarting wound compute for each experiment folder...")
+        print("\tStart time:", time.ctime())
+
+        for index, basename in enumerate(basename_list):
+            print("\tProcessing folder:", basename)
+            wcf.wc_process_folder(os.path.join(path_output, basename), self.max_cpu_usage_percent.value())
+
+        print("\tEnd time:", time.ctime())
+        print("\tTotal time taken:", format_timespan(time.time() - time_start))
+        print("\tDone running Wound Compute!")
+
+
+    def check_for_segmentation(self,path_input_fn:str, basename_fn:str, image_type:str='ph1'):
+        folder_path_list = sorted(os.scandir(os.path.join(path_input_fn, basename_fn)), key=lambda x: x.name)
+        folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
+
+        frames = len(os.listdir(os.path.join(folder_path_list[0].path, image_type + "_images")))
+        try:
+            metrics = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "segment_" + image_type)) if f.endswith(".txt")]
+        except:
+            QMessageBox.critical(self, "Error",
+                                 "Cannot find folder containing segmented images. Please run again and check the 'Run Wound Compute' option."
+                                )
+            self.status_label.setText("Ready")
+            self.hide_overlay()
+            return
+
+
+    def extract_metadata(
+        self,image_type:str='ph1'
+    ):
+        """Extract metadata."""
+        print("Extracting metadata...")
+        imaging_interval = self.imaging_interval.value()
+        path_output = self.path_output
+        basename_list = self.basename_list
+        stage_pos_maps = self.stage_pos_maps
+
+        for index, basename in enumerate(basename_list):
+
+            # Check if there's an existing condition map file
+            condition_map_path = os.path.join(path_output, f'code_output_{basename}.xlsx')
+            if os.path.exists(condition_map_path):
+                print("\tFound existing condition map file.")
+                try:
+                    df_assignments = pd.read_excel(condition_map_path, sheet_name='condition_map')
+                except Exception as e:
+                    print("\tError reading condition map file:", e)
+                    df_assignments = None
+            else:
+                df_assignments = None
+
+            if df_assignments is None:
+                # Extract stage position map for the current basename
+                stage_pos_map = stage_pos_maps.get(basename, {})
+
+                # Initialize the PyQt5-based WellPlateInterface
+                dialog = wpg.WellPlateInterface(stage_pos_map, basename)
+
+                # Make the dialog modal and wait for user input
+                if dialog.exec_() == QDialog.Accepted:
+                    df_assignments = dialog.get_assigned_dataframe()
+
+                    # Save the condition map to an Excel file
+                    df_assignments.to_excel(condition_map_path, sheet_name='condition_map', index=False)
+                    print("\tCondition map saved to Excel file")
+
+            # Extract data from the folders and create an Excel file
+            dm.extract_data(
+                path_output, basename, image_type, imaging_interval, df_assignments
+            )
+            print(f"\tData extracted to Excel file in {basename}.xlsx")
+            
+            # Move ph1_contour_all_*.png images from all samples into the same folder
+            dm.find_and_copy_contour_images(
+                path_output, basename, image_type
+            )
+            print(f"\tDone extracting data!")
+
+
+    def visualize_data(self):
+        """Visualize data."""
+        print("Visualizing data...")
+        vis_window = VisualizationWindow(self.path_output)
+        vis_window.exec_()
+#         vis_window.show()
+
+
+    def show_overlay(self):
+        if not self.overlay:
+            self.overlay = QWidget(self)
+            self.overlay.setStyleSheet("background-color: rgba(0, 0, 0, 128);")
+            self.overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+        self.overlay.resize(self.size())
+        self.overlay.show()
+        self.overlay.raise_()
+
+
+    def hide_overlay(self):
+        if self.overlay:
+            self.overlay.hide()
+
+
+    def close_app(self):
+        """Close the application."""
+        self.close()
 
 
 class VisualizationWindow(QDialog):
@@ -589,419 +1016,3 @@ class VisualizationWindow(QDialog):
         q_image = QImage()
         q_image.loadFromData(buffer.getvalue())
         return QPixmap.fromImage(q_image)
-
-
-
-class MyWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Wound Compute")
-        self.setGeometry(100, 100, 540, 250)
-        self.overlay = None
-        self.basename_list = None
-        self.path_output = None
-        self.stage_pos_maps = None
-        
-        # Central widget for the main window
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-
-        # Main vertical layout
-        main_layout = QVBoxLayout()
-
-        # 1. Directory Input with Browse Button
-#         main_layout.addWidget(QLabel("Please select the appropriate folder:"))
-
-        dir_layout = QHBoxLayout()
-        self.dir_input = QLineEdit()
-        self.dir_input.setPlaceholderText("Enter folder path or browse...")
-        self.browse_button = QPushButton("Browse")
-        self.browse_button.clicked.connect(self.browse_folder)
-        
-        dir_layout.addWidget(QLabel("Directory with .TIF files:"))
-        dir_layout.addWidget(self.dir_input)
-        dir_layout.addWidget(self.browse_button)
-        main_layout.addLayout(dir_layout)
-
-        # Use a form layout for other widgets
-        form_layout = QFormLayout()
-
-        # 2. Drop-down list (ComboBox) with description
-        self.microscope_type = QComboBox()
-        self.microscope_type.addItems(["General"]) # "Cytation" is under construction
-        form_layout.addRow(QLabel("Microscope type:"), self.microscope_type)
-
-        # 3. Slider (QSlider) with description and a value display
-        slider_layout = QHBoxLayout()
-        self.max_cpu_usage_percent = QSlider(Qt.Horizontal)
-        self.max_cpu_usage_percent.setRange(1, 100)
-        self.max_cpu_usage_percent.setValue(80)  # Default value
-        self.max_cpu_usage_percent.setFixedWidth(320)
-        self.max_cpu_usage_percent.setToolTip("Set the maximum CPU usage percentage")
-        
-        self.slider_label = QLabel(f"{self.max_cpu_usage_percent.value()}%")
-        self.max_cpu_usage_percent.valueChanged.connect(self.update_slider_label)
-
-        slider_layout.addWidget(self.max_cpu_usage_percent)
-        slider_layout.addWidget(self.slider_label)
-        form_layout.addRow(QLabel("Max CPU % usage:"), slider_layout)
-
-        # Add form layout to the main layout
-        main_layout.addLayout(form_layout)
-
-        # 4. Imaging Interval input
-        self.imaging_interval = QDoubleSpinBox()
-        self.imaging_interval.setRange(0.01, 1000.0)  # Set a reasonable range
-        self.imaging_interval.setValue(0.50)  # Default value
-        self.imaging_interval.setSingleStep(0.1)  # Step size for arrow keys
-        self.imaging_interval.setDecimals(2)  # Show 2 decimal places
-        self.imaging_interval.setSuffix(" hours")  # Add units
-        form_layout.addRow(QLabel("Imaging Interval (hours):"), self.imaging_interval)
-
-        # 5. Four Checkboxes (QCheckBox)
-        self.check_organize = QCheckBox("Organize .tif files and prepare .yaml files")
-        self.check_run_wc = QCheckBox("Run Wound Compute in parallel")
-        self.check_extract_data = QCheckBox("Extract metadata")
-        # self.check_visualize = QCheckBox("Visualize data")
-
-        main_layout.addWidget(self.check_organize)
-        main_layout.addWidget(self.check_run_wc)
-        main_layout.addWidget(self.check_extract_data)
-        # main_layout.addWidget(self.check_visualize)
-
-        # 6. Run and Exit Buttons
-        button_layout = QHBoxLayout()
-
-        self.run_button = QPushButton("Run")
-        self.run_button.clicked.connect(self.run_process)
-        button_layout.addWidget(self.run_button)
-
-        self.exit_button = QPushButton("Exit")
-        self.exit_button.clicked.connect(self.close_app)
-        button_layout.addWidget(self.exit_button)
-
-        main_layout.addLayout(button_layout)
-
-        # 7. Status Message
-        self.status_label = QLabel("Ready")
-        main_layout.addWidget(self.status_label)
-
-        # Set the main layout to the central widget
-        central_widget.setLayout(main_layout)
-
-    def browse_folder(self):
-        """Open a dialog to browse and select a folder."""
-        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder")
-        if folder_path:
-            self.dir_input.setText(folder_path)
-
-    def update_slider_label(self):
-        """Update the label next to the slider to show its current value."""
-        self.slider_label.setText(f"{self.max_cpu_usage_percent.value()}%")
-
-    def run_process(self):
-        """Run the main processing based on user selections."""
-        self.show_overlay()
-
-        path_input = self.dir_input.text()
-
-        # Check if the directory is provided
-        if not path_input:
-            QMessageBox.warning(self, "Warning", "Please select a directory!")
-            return
-        else:
-            path_input = Path(path_input)
-
-        self.status_label.setText("Processing...")
-        QApplication.processEvents()  # Update the UI immediately
-
-        # Call the corresponding methods based on checkbox selections
-        if self.check_organize.isChecked():
-            self.organize_files(path_input)
-            print(f'basename_list={self.basename_list}')
-            print(f'path_output={self.path_output}')
-        else:
-            self.obtain_organized_files(path_input)
-
-
-        if self.check_run_wc.isChecked():
-            self.run_wound_compute()
-        elif self.check_extract_data.isChecked(): #  or self.check_visualize.isChecked()
-            self.check_for_segmentation(self.path_output, self.basename_list[0])
-
-        if self.check_extract_data.isChecked():
-            self.extract_metadata()
-
-        # if self.check_visualize.isChecked():
-        #     self.visualize_data()
-
-        self.status_label.setText("Done!")
-        self.hide_overlay()
-
-    def organize_files(self,path_input:str,image_type:str='ph1'):
-        """Organize .tif files and prepare .yaml files."""
-        print("Organizing .tif files and preparing .yaml files...")
-
-        # Create new folder for sorted files
-        path_output = self.create_new_folder(path_input)
-        
-        # Create yaml file for image type
-        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True)
-#         print("\tCreated .yaml file")
-
-        basename_list, is_nd = wcf.define_basename_list(
-            path_input, path_output,self.microscope_type
-        )
-        print("\tBasename list:", basename_list)
-        print("\t.nd file found:", is_nd)
-
-        # Sort images in input folder into Sorted/basename/ folders
-        print("\tSorting images into corresponding basename folders...")
-        wcf.sort_basename_folders(basename_list, path_input, path_output, self.microscope_type)
-        print("\tDone!")
-        
-        # # Check if the .nd file is found
-        # if not is_nd:
-        #     # Show a pop-up warning that the .nd file is missing
-        #     msg_box = QMessageBox()
-        #     msg_box.setIcon(QMessageBox.Warning)
-        #     msg_box.setText("No .nd file found in the selected directory!")
-        #     msg_box.setInformativeText("The program cannot proceed without the .nd file. Please ensure the file is present.")
-        #     msg_box.setWindowTitle("Missing .nd File")
-        #     msg_box.setStandardButtons(QMessageBox.Ok)
-
-        #     # Connect the "Ok" button to close the application
-        #     msg_box.buttonClicked.connect(self.close_app)
-        #     msg_box.exec_()
-        
-        # Extract stage position information from .nd file or from data in folder
-        stage_pos_maps = wcf.extract_nd_info(
-            basename_list, path_output, is_nd, ms_choice=self.microscope_type
-        )
-        print("\tExtracted stage position information")
-        print(f"\t{stage_pos_maps}")
-        # import sys
-        # sys.exit("Exit code bc testing")
-        
-        #  Sort images in each basename folder into their corresponding stage position folders
-        print("\tSorting images in each basename folder into their corresponding stage position folders...")
-        wcf.efficient_sort_stage_pos(
-            basename_list, path_output, stage_pos_maps, image_type, self.microscope_type, is_nd
-        )
-        print("\tDone organizing .tif files and preparing .yaml files!")
-        self.basename_list = basename_list
-        self.path_output = path_output
-        self.stage_pos_maps = stage_pos_maps
-
-
-    def create_new_folder(self,path_input:str)->str:
-        """Create new folder to sort files."""
-        while True:
-            # Prompt the user for a new folder name
-            folder_name, ok = QInputDialog.getText(
-                self, "New Folder Name","Enter a name for the new sorted folder:")
-
-            # Check if the user pressed "OK" and provided a name
-            if not ok:
-                # User canceled the dialog, exit the function
-                return
-
-            folder_name = folder_name.strip()
-            if not folder_name:
-                QMessageBox.warning(self, "Warning", "Folder name cannot be empty!")
-                continue
-
-            # Create the full path for the new folder
-            new_folder_path = os.path.join(path_input, folder_name)
-
-            # Check if the folder already exists
-            if os.path.exists(new_folder_path):
-                QMessageBox.warning(self, "Warning", f"Folder '{folder_name}' already exists! Please enter a new name.")
-            else:
-                # Create the new folder if it doesn't exist
-                try:
-                    os.makedirs(new_folder_path)
-#                     QMessageBox.information(self, "Success", f"Folder '{folder_name}' created successfully!")
-                    return new_folder_path
-#                     break  # Exit the loop since the folder was successfully created
-                except Exception as e:
-                    QMessageBox.critical(self, "Error", f"Failed to create folder: {e}")
-                    self.status_label.setText("Ready")
-                    self.hide_overlay()
-                    return
-
-
-    def obtain_organized_files(self,path_input:str):
-        
-        # Prompt user to select the folder with organized data
-        QMessageBox.information(
-            self,"Note",
-            "The 'Organized .tif files and prepare .yaml files' button was not checked. This indicates that the .tif files are sorted and .yaml files are prepared. Please select the location of the sorted folder. Thanks!",
-        )
-        organized_folder = QFileDialog.getExistingDirectory(self, "Select Folder with Organized Data")
-        if not organized_folder:
-            QMessageBox.warning(self, "Warning", "No folder selected. Process cancelled.")
-            self.status_label.setText("Ready")
-            return
-        path_output = Path(organized_folder)
-        
-        all_folders_in_path = set([os.path.dirname(p) for p in glob.glob(organized_folder)])
-        if not all_folders_in_path:
-            QMessageBox.warning(self, "Warning", "No sorted folders found. Process cancelled.")
-        
-        file_list = os.listdir(path_output)
-        if "basename_list.yaml" in file_list:
-            print("\tFound basename_list.yaml file in the input folder")
-            with open(os.path.join(path_output, 'basename_list.yaml'), 'r') as file:
-                # Load the YAML content
-                basename_list = yaml.safe_load(file)
-        else:
-            # If basename.yaml file is not found, then get the list of folders in the input folder
-            # and set it as the basename list
-            basename_list = os.listdir(path_output)
-            basename_list = [name for name in basename_list if os.path.isdir(os.path.join(path_output, name))]
-            if not basename_list:
-                QMessageBox.warning(self,"Warning","No sorted directory found. Process cancelled.")
-
-        if "stage_positions.yaml" in file_list:
-            print("\tFound stage_positions.yaml file in the input folder")
-            with open(os.path.join(path_output, 'stage_positions.yaml'), 'r') as file:
-                # Load the YAML content
-                data = yaml.safe_load(file)
-            stage_pos_maps = {}
-            for index, basename in enumerate(basename_list):
-                stage_pos_maps[basename] = data[basename]
-        else:
-            # If stage_positions.yaml file is not found, then get the list of folders in the basename folder
-            # and set it as the stage_pos_maps
-            stage_pos_maps = {}
-            for index, basename in enumerate(basename_list):
-                path_temp = os.path.join(path_output, Path(basename))
-                try:
-                    positions = os.listdir(path_temp)
-                    positions.sort()
-                    positions = [n1 for n1 in positions if not n1.endswith('.nd')]
-                    stage_pos_maps[basename] = {N: position for N, position in zip(range(1, len(positions) + 1), positions)}
-                    print(f"\tFound {len(positions)} stage positions for {basename}.")
-                except FileNotFoundError:
-                    print(f"\tNo folder found for {basename}. Skipping...")
-                    continue
-        self.basename_list = basename_list
-        self.path_output = path_output
-        self.stage_pos_maps = stage_pos_maps
-
-            
-    def run_wound_compute(self):
-        """Run Wound Compute in parallel."""
-        print("Running Wound Compute...")
-        basename_list = self.basename_list
-        path_output = self.path_output
-
-        time_start = time.time()
-        print("\tStarting wound compute for each experiment folder...")
-        print("\tStart time:", time.ctime())
-
-        for index, basename in enumerate(basename_list):
-            print("\tProcessing folder:", basename)
-            wcf.wc_process_folder(os.path.join(path_output, basename), self.max_cpu_usage_percent.value())
-
-        print("\tEnd time:", time.ctime())
-        print("\tTotal time taken:", format_timespan(time.time() - time_start))
-        print("\tDone running Wound Compute!")
-
-
-    def check_for_segmentation(self,path_input_fn:str, basename_fn:str, image_type:str='ph1'):
-        folder_path_list = sorted(os.scandir(os.path.join(path_input_fn, basename_fn)), key=lambda x: x.name)
-        folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
-
-        frames = len(os.listdir(os.path.join(folder_path_list[0].path, image_type + "_images")))
-        try:
-            metrics = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "segment_" + image_type)) if f.endswith(".txt")]
-        except:
-            QMessageBox.critical(self, "Error",
-                                 "Cannot find folder containing segmented images. Please run again and check the 'Run Wound Compute' option."
-                                )
-            self.status_label.setText("Ready")
-            self.hide_overlay()
-            return
-
-
-    def extract_metadata(
-        self,image_type:str='ph1'
-    ):
-        """Extract metadata."""
-        print("Extracting metadata...")
-        imaging_interval = self.imaging_interval.value()
-        path_output = self.path_output
-        basename_list = self.basename_list
-        stage_pos_maps = self.stage_pos_maps
-
-        for index, basename in enumerate(basename_list):
-
-            # Check if there's an existing condition map file
-            condition_map_path = os.path.join(path_output, f'code_output_{basename}.xlsx')
-            if os.path.exists(condition_map_path):
-                print("\tFound existing condition map file.")
-                try:
-                    df_assignments = pd.read_excel(condition_map_path, sheet_name='condition_map')
-                except Exception as e:
-                    print("\tError reading condition map file:", e)
-                    df_assignments = None
-            else:
-                df_assignments = None
-
-            if df_assignments is None:
-                # Extract stage position map for the current basename
-                stage_pos_map = stage_pos_maps.get(basename, {})
-
-                # Initialize the PyQt5-based WellPlateInterface
-                dialog = wpg.WellPlateInterface(stage_pos_map, basename)
-
-                # Make the dialog modal and wait for user input
-                if dialog.exec_() == QDialog.Accepted:
-                    df_assignments = dialog.get_assigned_dataframe()
-
-                    # Save the condition map to an Excel file
-                    df_assignments.to_excel(condition_map_path, sheet_name='condition_map', index=False)
-                    print("\tCondition map saved to Excel file")
-
-            # Extract data from the folders and create an Excel file
-            dm.extract_data(
-                path_output, basename, image_type, imaging_interval, df_assignments
-            )
-            print(f"\tData extracted to Excel file in {basename}.xlsx")
-            
-            # Move ph1_contour_all_*.png images from all samples into the same folder
-            dm.find_and_copy_contour_images(
-                path_output, basename, image_type
-            )
-            print(f"\tDone extracting data!")
-
-
-    def visualize_data(self):
-        """Visualize data."""
-        print("Visualizing data...")
-        vis_window = VisualizationWindow(self.path_output)
-        vis_window.exec_()
-#         vis_window.show()
-
-
-    def show_overlay(self):
-        if not self.overlay:
-            self.overlay = QWidget(self)
-            self.overlay.setStyleSheet("background-color: rgba(0, 0, 0, 128);")
-            self.overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
-
-        self.overlay.resize(self.size())
-        self.overlay.show()
-        self.overlay.raise_()
-
-
-    def hide_overlay(self):
-        if self.overlay:
-            self.overlay.hide()
-
-
-    def close_app(self):
-        """Close the application."""
-        self.close()

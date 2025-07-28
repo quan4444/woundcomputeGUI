@@ -32,7 +32,10 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         dfs[metric.split('_vs_')[0]] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
 
         for file in folder_path_list:
-            dfs[metric.split('_vs_')[0]][file.name] = pd.read_table(os.path.join(file.path, 'segment_' + image_type, metric), header=None)
+            try:
+                dfs[metric.split('_vs_')[0]][file.name] = pd.read_table(os.path.join(file.path, 'segment_' + image_type, metric), header=None)
+            except Exception as e:
+                print(e)
 
         append_to_excel(os.path.join(path_input_fn, 'code_output_' + basename_fn + '.xlsx'), dfs[metric.split('_vs_')[0]], metric.split('_vs_')[0])
 
@@ -56,7 +59,10 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
 
             position_name = "_"+header_name[-1] + "_position"
             for file in folder_path_list:
-                dfs["pillar_positions"][file.name+position_name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+                try:
+                    dfs["pillar_positions"][file.name+position_name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+                except Exception as e:
+                    print(e)
 
             append_to_excel(excel_output_path, dfs["pillar_positions"], "pillar_positions", start_row_ind,sheet_exists_mode)
 
@@ -70,11 +76,14 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         elif header_name == "relative_pillar_distances_pair_names":
             pair_name_list = []
             for file in folder_path_list:
-                pillar_pairs = np.loadtxt(
-                    os.path.join(file.path, 'track_pillars_' + image_type, mp), dtype=str, comments=None
-                    )
-                pillar_pairs_string = ', '.join(pillar_pairs)  # Convert to comma-separated string
-                pair_name_list.append(pillar_pairs_string)
+                try:
+                    pillar_pairs = np.loadtxt(
+                        os.path.join(file.path, 'track_pillars_' + image_type, mp), dtype=str, comments=None
+                        )
+                    pillar_pairs_string = ', '.join(pillar_pairs)  # Convert to comma-separated string
+                    pair_name_list.append(pillar_pairs_string)
+                except Exception as e:
+                    print(e)
 
         else:
             if header_name == "relative_pillar_distances_smoothed_GPR":
@@ -82,7 +91,10 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
             dfs[header_name] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
 
             for file in folder_path_list:
-                dfs[header_name][file.name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+                try:
+                    dfs[header_name][file.name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+                except Exception as e:
+                    print(e)
 
             append_to_excel(excel_output_path, dfs[header_name], header_name)
 
