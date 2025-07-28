@@ -307,12 +307,13 @@ def wc_run(input_path_fn: str):
                 format_timespan(secondsPassed))
     except Exception as ex:
         time_all.append(time.time())
+        print("---------ERROR OF SOME DESCRIPTION HAS HAPPENED-------")
         print("\tPath: ", input_path_fn, "    Tissue: ", os.path.basename(os.path.normpath(input_path_fn)), "     time: ",
                   time.ctime())
-        print("---------ERROR OF SOME DESCRIPTION HAS HAPPENED-------")
-        # print(ex)
-        print("An error occurred:", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
+        print(ex)
+        print("There is a good chance that the error occurs due to empty folder or poor image quality resulting in null segmentation. This should not affect the processing of other folders.")
+        # print("An error occurred:", file=sys.stderr)
+        # traceback.print_exc(file=sys.stderr)
         print("------------------------------------------------------")
 
 
