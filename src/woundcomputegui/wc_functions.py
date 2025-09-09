@@ -28,9 +28,9 @@ def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_
         'segment_fluorescent': False,
         'seg_fl_version': 1,
         'seg_fl_visualize': False,
-        'segment_ph1': True,  # True,
+        'segment_ph1': False,
         'seg_ph1_version': 2,
-        'seg_ph1_visualize': True,
+        'seg_ph1_visualize': False,
         'track_brightfield': False,
         'track_bf_version': 1,
         'track_bf_visualize': False,
@@ -42,21 +42,38 @@ def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_
         'ph1_seg_with_fl_seg_visualize': False,
         'ph1_track_with_fl_seg_visualize': False,
         'zoom_type': 2,
-        'track_pillars_ph1': False
+        'track_pillars_ph1': False,
+        'segment_dic': False,
+        'seg_dic_version': 1,
+        'seg_dic_visualize': False,
+        'track_dic_visualize': False,
+        'track_pillars_dic': False
     }
 
     # Conditionally modify yaml file based on image_type input
 
-    for key, value in yaml_input_file.items():
-        if image_type_in in key and not "version" in key and not "fl" in key and not "track" in key:
-            yaml_input_file[key] = True
+    if image_type_in == 'ph1':
+        yaml_input_file['segment_ph1'] = True
+        yaml_input_file['seg_ph1_visualize'] = True
+        yaml_input_file['track_pillars_ph1'] = True
+        yaml_input_file['track_ph1_visualize'] = True
+        yaml_input_file['track_ph1'] = True
+    elif image_type_in == 'dic':
+        yaml_input_file['segment_dic'] = True
+        yaml_input_file['seg_dic_visualize'] = True
+        yaml_input_file['track_pillars_dic'] = True
+        yaml_input_file['track_dic_visualize'] = True
 
-            if is_fl_in:
-                if "fl" in key and not "version" in key:
-                    yaml_input_file[key] = True
+    # for key, value in yaml_input_file.items():
+    #     if image_type_in in key and not "version" in key and not "fl" in key and not "track" in key:
+    #         yaml_input_file[key] = True
 
-        if "pillars" in key and not "version" in key and is_pillars_in:
-            yaml_input_file[key] = True
+    #         if is_fl_in:
+    #             if "fl" in key and not "version" in key:
+    #                 yaml_input_file[key] = True
+
+    #     if "pillars" in key and not "version" in key and is_pillars_in:
+    #         yaml_input_file[key] = True
 
     # Write yaml output to path_output
     with open(os.path.join(path_in, 'wc_dataset_' + image_type_in + '.yaml'), 'w') as file:
@@ -226,7 +243,6 @@ def extract_nd_info(basename_list_fn: list, path_output_fn: str, is_nd: bool, ms
 
 def move_rename_files(file, basename_fn: str, parent_output_fn: str,
                       stage_pos_maps_fn: dict, image_type_fn: str, ms_choice: str, is_nd: bool):
-    #print(f'Processing file: {file}')
     if not file.lower().endswith('.tif'):
         return f"Skipped non-TIF file: {file}"
 
@@ -327,6 +343,8 @@ def wc_process_folder(main_folder:str, cpu_threshold:int):
         print(f"Folder {main_folder} does not exist. Skipping...")
         return
     subfolders = [f for f in os.scandir(main_folder) if f.is_dir()]
+    print(f'main_folder = {main_folder}')
+    print(f'subfolders = {subfolders}')
 
     with ProcessPoolExecutor() as executor:
         futures = set()

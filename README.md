@@ -67,7 +67,7 @@ Note that once you have created this virtual environment you can ``activate`` an
 2. Type the command ``ls`` and make sure that the file ``pyproject.toml`` is in the current directory.
 3. Now, create an editable install of wound compute:
 ```bash
-python -m pip install -e .
+python -m pip install -e . --force-reinstall --no-cache-dir
 ```
 4. If you would like to see what packages this has installed, you can type ``pip list``
 

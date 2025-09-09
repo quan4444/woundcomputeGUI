@@ -7,19 +7,36 @@ import re
 import numpy as np
 
 
+def match_image_type_formatting(img_type:str)->str:
+    if img_type in ["ph1","dic"]:
+        return img_type
+    elif img_type == "Phase contrast":
+        return "ph1"
+    elif img_type == "Differential interference contrast":
+        return "dic"
+    else:
+        raise ValueError(f"Unsupported image type: {img_type}")
+
+
 # DATA EXTRACTION AND VISUALIZATION FUNCTIONS #
 def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval_in: int, df_assignments_in) -> (dict,list) :
     if not os.path.exists( os.path.join(path_input_fn, basename_fn )):
         print(f"Folder {basename_fn} does not exist. Skipping data extraction...")
         return
 
+    image_type = match_image_type_formatting(image_type)
+
     folder_path_list = sorted(os.scandir(os.path.join(path_input_fn, basename_fn)), key=lambda x: x.name)
     folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
 
-    frames = len(os.listdir(os.path.join(folder_path_list[0].path, image_type + "_images")))
-    metrics = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "segment_" + image_type)) if f.endswith(".txt")]
-    metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
-    tlist = [T * interval_in for T in range(0, frames)]
+    metrics = []
+    folder_ind=0
+    while metrics == [] and folder_ind < len(folder_path_list):
+        frames = len(os.listdir(os.path.join(folder_path_list[folder_ind].path, image_type + "_images")))
+        metrics = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "segment_" + image_type)) if f.endswith(".txt")]
+        metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
+        tlist = [T * interval_in for T in range(0, frames)]
+        folder_ind+=1
 
     dfs = {}
 
@@ -157,6 +174,7 @@ def find_and_copy_contour_images(path_output, basename, image_type):
     - basename: str, base name for the output files
     - image_type: str, type of images (e.g., 'ph1')
     """
+    image_type = match_image_type_formatting(image_type)
     # Define the source and destination directories
     if not os.path.exists(os.path.join(path_output, basename)):
         print(f"Folder {basename} does not exist. Skipping visualization...")

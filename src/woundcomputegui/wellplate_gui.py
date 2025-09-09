@@ -17,7 +17,6 @@ class WellPlateInterface(QDialog):
 
         # Filter stage_pos_map
         self.stage_pos_map_out = self.filter_stage_pos_map(stage_pos_map_in)
-        # print(f'wellplate stage_pos_map_out = {self.stage_pos_map_out}')
 
         if not self.stage_pos_map_out:
             QMessageBox.critical(self, "Error", "Invalid stage position map. Assigning all wells to condition 1.")

@@ -26,17 +26,6 @@ import woundcomputegui.wellplate_gui as wpg
 import woundcomputegui.data_management as dm
 
 
-# Capture all warnings and log them in a .txt file
-logging.basicConfig(
-    filename='warnings.txt',          # Output file
-    level=logging.WARNING,            # Capture warnings and above
-    format='%(asctime)s - %(levelname)s - %(message)s'  # Optional formatting
-)
-# Override warnings.showwarning to use logging
-warnings.showwarning = lambda message, category, filename, lineno, file=None, line=None: \
-    logging.warning(f"{filename}:{lineno} - {category.__name__}: {message}")
-
-
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -73,7 +62,7 @@ class MyWindow(QMainWindow):
 
         # 2. Drop-down list (ComboBox) with description
         self.microscope_type = QComboBox()
-        self.microscope_type.addItems(["General"]) # "Cytation" is under construction
+        self.microscope_type.addItems(["Phase contrast","Differential interference contrast"]) # "General", "Cytation" is under construction
         form_layout.addRow(QLabel("Microscope type:"), self.microscope_type)
 
         # 3. Slider (QSlider) with description and a value display
@@ -140,12 +129,29 @@ class MyWindow(QMainWindow):
         if folder_path:
             self.dir_input.setText(folder_path)
 
+    
+    # def catch_warnings_in_txt(self):
+    #     # Capture all warnings and log them in a .txt file
+    #     logging.basicConfig(
+    #         filename=self.dir_input.text()+'/warnings.txt',          # Output file
+    #         level=logging.WARNING,            # Capture warnings and above
+    #         format='%(asctime)s - %(levelname)s - %(message)s'  # Optional formatting
+    #     )
+    #     # Override warnings.showwarning to use logging
+    #     warnings.showwarning = lambda message, category, filename, lineno, file=None, line=None: \
+    #         logging.warning(f"{filename}:{lineno} - {category.__name__}: {message}")
+
+
     def update_slider_label(self):
         """Update the label next to the slider to show its current value."""
         self.slider_label.setText(f"{self.max_cpu_usage_percent.value()}%")
 
     def run_process(self):
         """Run the main processing based on user selections."""
+    
+        temp_img_type = str(self.microscope_type.currentText())
+        self.image_type = dm.match_image_type_formatting( temp_img_type )
+
         self.show_overlay()
 
         path_input = self.dir_input.text()
@@ -154,8 +160,9 @@ class MyWindow(QMainWindow):
         if not path_input:
             QMessageBox.warning(self, "Warning", "Please select a directory!")
             return
-        else:
-            path_input = Path(path_input)
+        # else:
+        #     self.catch_warnings_in_txt()
+        #     path_input = Path(path_input)
 
         self.status_label.setText("Processing...")
         QApplication.processEvents()  # Update the UI immediately
@@ -163,10 +170,9 @@ class MyWindow(QMainWindow):
         # Call the corresponding methods based on checkbox selections
         if self.check_organize.isChecked():
             self.organize_files(path_input)
-            # print(f'basename_list={self.basename_list}')
-            # print(f'path_output={self.path_output}')
         else:
             self.obtain_organized_files(path_input)
+            self.check_yaml_files()
 
 
         if self.check_run_wc.isChecked():
@@ -183,9 +189,11 @@ class MyWindow(QMainWindow):
         self.status_label.setText("Done!")
         self.hide_overlay()
 
-    def organize_files(self,path_input:str,image_type:str='ph1'):
+    def organize_files(self,path_input:str):
         """Organize .tif files and prepare .yaml files."""
         print("Organizing .tif files and preparing .yaml files...")
+
+        image_type = self.image_type
 
         # Create new folder for sorted files
         path_output = self.create_new_folder(path_input)
@@ -335,6 +343,79 @@ class MyWindow(QMainWindow):
         self.path_output = path_output
         self.stage_pos_maps = stage_pos_maps
 
+    
+    def check_yaml_files(self):
+        main_path = self.path_output
+        image_type = self.image_type
+        yaml_files = self.find_yaml_with_wc_settings(main_path)
+        for yf in yaml_files:
+            yf = Path(yf)
+            self.change_yaml_settings_by_image_type(yf,image_type)
+
+
+    def change_yaml_settings_by_image_type(self,yaml_file,image_type):
+        yaml_input_file = {
+            'version': 1.0,
+            'segment_brightfield': False,
+            'seg_bf_version': 1,
+            'seg_bf_visualize': False,
+            'segment_fluorescent': False,
+            'seg_fl_version': 1,
+            'seg_fl_visualize': False,
+            'segment_ph1': False,
+            'seg_ph1_version': 2,
+            'seg_ph1_visualize': False,
+            'track_brightfield': False,
+            'track_bf_version': 1,
+            'track_bf_visualize': False,
+            'track_ph1': False,
+            'track_ph1_version': 1,
+            'track_ph1_visualize': False,
+            'bf_seg_with_fl_seg_visualize': False,
+            'bf_track_with_fl_seg_visualize': False,
+            'ph1_seg_with_fl_seg_visualize': False,
+            'ph1_track_with_fl_seg_visualize': False,
+            'zoom_type': 2,
+            'track_pillars_ph1': False,
+            'segment_dic': False,
+            'seg_dic_version': 1,
+            'seg_dic_visualize': False,
+            'track_dic_visualize': False,
+            'track_pillars_dic': False
+        }
+
+        # Conditionally modify yaml file based on image_type input
+        if image_type == 'ph1':
+            yaml_input_file['segment_ph1'] = True
+            yaml_input_file['seg_ph1_visualize'] = True
+            yaml_input_file['track_pillars_ph1'] = True
+            yaml_input_file['track_ph1_visualize'] = True
+            yaml_input_file['track_ph1'] = True
+        elif image_type == 'dic':
+            yaml_input_file['segment_dic'] = True
+            yaml_input_file['seg_dic_visualize'] = True
+            yaml_input_file['track_pillars_dic'] = True
+            yaml_input_file['track_dic_visualize'] = True
+
+        parent_dir = yaml_file.parent
+        if os.path.exists(yaml_file):
+            os.remove(yaml_file)
+
+        with open(os.path.join(parent_dir, 'wc_dataset_' + image_type + '.yaml'), 'w') as file:
+            yaml.safe_dump(yaml_input_file, file, sort_keys=False)
+
+    
+    def find_yaml_with_wc_settings(self,base_path):
+        yaml_files = set()
+        
+        for root, dirs, files in os.walk(base_path):
+            for file in files:
+                if file.endswith('.yaml') and 'wc_dataset_' in file:
+                    yaml_files.add(os.path.join(root, file))
+                    break
+
+        return list(yaml_files)
+
             
     def run_wound_compute(self):
         """Run Wound Compute in parallel."""
@@ -355,8 +436,15 @@ class MyWindow(QMainWindow):
         print("\tDone running Wound Compute!")
 
 
-    def check_for_segmentation(self,path_input_fn:str, basename_fn:str, image_type:str='ph1'):
-        folder_path_list = sorted(os.scandir(os.path.join(path_input_fn, basename_fn)), key=lambda x: x.name)
+    def check_for_segmentation(self,path_input_fn:str, basename_fn:str):
+
+        if 'warn' in basename_fn:
+            return
+
+        image_type = self.image_type
+
+        basename_path = os.path.join(path_input_fn, basename_fn)
+        folder_path_list = sorted(os.scandir(basename_path), key=lambda x: x.name)
         folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
 
         frames = len(os.listdir(os.path.join(folder_path_list[0].path, image_type + "_images")))
@@ -372,7 +460,7 @@ class MyWindow(QMainWindow):
 
 
     def extract_metadata(
-        self,image_type:str='ph1'
+        self
     ):
         """Extract metadata."""
         print("Extracting metadata...")
@@ -380,8 +468,12 @@ class MyWindow(QMainWindow):
         path_output = self.path_output
         basename_list = self.basename_list
         stage_pos_maps = self.stage_pos_maps
+        image_type = self.image_type
 
         for index, basename in enumerate(basename_list):
+
+            if 'warn' in basename:
+                continue
 
             # Check if there's an existing condition map file
             condition_map_path = os.path.join(path_output, f'code_output_{basename}.xlsx')
@@ -420,7 +512,7 @@ class MyWindow(QMainWindow):
             dm.find_and_copy_contour_images(
                 path_output, basename, image_type
             )
-            print(f"\tDone extracting data!")
+            print("\tDone extracting data!")
 
 
     def visualize_data(self):
@@ -553,11 +645,12 @@ class VisualizationWindow(QDialog):
             self.load_all_samples_grid(basename)
         else:
             # Implement other data type visualizations here
-            QMessageBox.information(self, "Info", f"Visualization not implemented.")
+            QMessageBox.information(self, "Info", "Visualization not implemented.")
 
 
     def load_raw_images(self, basename, sample):
-        image_folder = os.path.join(self.path_output, basename, sample, "ph1_images")
+        image_type = self.image_type
+        image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
             if file.endswith(".TIF") or file.endswith(".tif"):
@@ -577,7 +670,8 @@ class VisualizationWindow(QDialog):
 
 
     def load_tissue_mask(self, basename, sample):
-        image_folder = os.path.join(self.path_output, basename, sample, "ph1_images")
+        image_type = self.image_type
+        image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
             if file.endswith(".TIF") or file.endswith(".tif"):
@@ -585,7 +679,7 @@ class VisualizationWindow(QDialog):
                 image = Image.open(image_path)
                 self.images.append(image)
         
-        tissue_mask_folder = os.path.join(self.path_output, basename, sample, "segment_ph1")
+        tissue_mask_folder = os.path.join(self.path_output, basename, sample, f"segment_{image_type}")
         self.tissue_masks = []
         for file in sorted(os.listdir(tissue_mask_folder)):
             if file.startswith("tissue_mask"):
@@ -627,7 +721,8 @@ class VisualizationWindow(QDialog):
 
 
     def load_wound_mask(self, basename, sample):
-        image_folder = os.path.join(self.path_output, basename, sample, "ph1_images")
+        image_type = self.image_type
+        image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
             if file.endswith(".TIF") or file.endswith(".tif"):
@@ -635,7 +730,7 @@ class VisualizationWindow(QDialog):
                 image = Image.open(image_path)
                 self.images.append(image)
 
-        wound_mask_folder = os.path.join(self.path_output, basename, sample, "segment_ph1")
+        wound_mask_folder = os.path.join(self.path_output, basename, sample, f"segment_{image_type}")
         self.wound_masks = []
         for file in sorted(os.listdir(wound_mask_folder)):
             if file.startswith("wound_mask"):
@@ -684,8 +779,9 @@ class VisualizationWindow(QDialog):
 
 
     def load_wound_mask_all_frames(self, basename, sample):
-        image_folder = os.path.join(self.path_output, basename, sample, "ph1_images")
-        wound_mask_folder = os.path.join(self.path_output, basename, sample, "segment_ph1")
+        image_type = self.image_type
+        image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
+        wound_mask_folder = os.path.join(self.path_output, basename, sample, f"segment_{image_type}")
 
         images = []
         wound_masks = []
@@ -792,7 +888,8 @@ class VisualizationWindow(QDialog):
 
 
     def wound_area_v_frame(self, basename, sample):
-        image_folder = os.path.join(self.path_output, basename, sample, "segment_ph1")
+        image_type = self.image_type
+        image_folder = os.path.join(self.path_output, basename, sample, f"segment_{image_type}")
         self.wound_area_plot = None
         for file in sorted(os.listdir(image_folder)):
             if file.startswith("wound_area") and file.endswith(".txt"):
@@ -840,6 +937,7 @@ class VisualizationWindow(QDialog):
 
 
     def load_all_samples_wound_masks(self, basename):
+        image_type = self.image_type
         samples = self.get_samples(basename)
         samples.sort(key=lambda x: int(''.join(filter(str.isdigit, x))))  # Sort samples numerically
         max_frames = 0
@@ -864,8 +962,8 @@ class VisualizationWindow(QDialog):
         self.cell_size = cell_size
 
         for sample in samples:
-            image_folder = os.path.join(self.path_output, basename, sample, "ph1_images")
-            wound_mask_folder = os.path.join(self.path_output, basename, sample, "segment_ph1")
+            image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
+            wound_mask_folder = os.path.join(self.path_output, basename, sample, f"segment_{image_type}")
 
             images = []
             wound_masks = []
