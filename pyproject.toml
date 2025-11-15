@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "woundcomputegui"
 version = "0.0.0"
 authors = [
-  { name="Quan Nguyen", email="quan@bu.edu" },
+  { name="Quan Nguyen, Anish Vasan", email="quan@bu.edu" },
 ]
 description = "woundcompute gui"
 readme = "README.md"

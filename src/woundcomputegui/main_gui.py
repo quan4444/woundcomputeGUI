@@ -62,7 +62,7 @@ class MyWindow(QMainWindow):
 
         # 2. Drop-down list (ComboBox) with description
         self.microscope_type = QComboBox()
-        self.microscope_type.addItems(["Phase contrast","Differential interference contrast"]) # "General", "Cytation" is under construction
+        self.microscope_type.addItems(["Phase contrast","Differential interference contrast"])
         form_layout.addRow(QLabel("Microscope type:"), self.microscope_type)
 
         # 3. Slider (QSlider) with description and a value display
@@ -90,9 +90,14 @@ class MyWindow(QMainWindow):
         self.imaging_interval.setSingleStep(0.1)  # Step size for arrow keys
         self.imaging_interval.setDecimals(2)  # Show 2 decimal places
         self.imaging_interval.setSuffix(" hours")  # Add units
-        form_layout.addRow(QLabel("Imaging Interval (hours):"), self.imaging_interval)
+        form_layout.addRow(QLabel("Imaging interval (hours):"), self.imaging_interval)
 
-        # 5. Four Checkboxes (QCheckBox)
+        # 5. Frame indices to skip
+        self.skip_frames_input = QLineEdit()
+        self.skip_frames_input.setPlaceholderText("e.g., 0,1,2")
+        form_layout.addRow(QLabel("Frame indices to skip (comma-separated):"), self.skip_frames_input)
+
+        # 6. Four Checkboxes (QCheckBox)
         self.check_organize = QCheckBox("Organize .tif files and prepare .yaml files")
         self.check_run_wc = QCheckBox("Run Wound Compute in parallel")
         self.check_extract_data = QCheckBox("Extract metadata")
@@ -103,7 +108,7 @@ class MyWindow(QMainWindow):
         main_layout.addWidget(self.check_extract_data)
         # main_layout.addWidget(self.check_visualize)
 
-        # 6. Run and Exit Buttons
+        # 7. Run and Exit Buttons
         button_layout = QHBoxLayout()
 
         self.run_button = QPushButton("Run")
@@ -116,7 +121,7 @@ class MyWindow(QMainWindow):
 
         main_layout.addLayout(button_layout)
 
-        # 7. Status Message
+        # 8. Status Message
         self.status_label = QLabel("Ready")
         main_layout.addWidget(self.status_label)
 
@@ -167,6 +172,16 @@ class MyWindow(QMainWindow):
         self.status_label.setText("Processing...")
         QApplication.processEvents()  # Update the UI immediately
 
+        print(f'self.skip_frames_input = {self.skip_frames_input}')
+        print(f'self.skip_frames_input.text() = {self.skip_frames_input.text()}')
+        print(f'type(self.skip_frames_input.text()) = {type(self.skip_frames_input.text())}')
+        frame_inds_skip_str = self.skip_frames_input.text()
+        if frame_inds_skip_str:
+            self.skip_frames_inds = [int(x) for x in frame_inds_skip_str.split(',')] # test empty, 0, "00,01"
+        else:
+            self.skip_frames_inds = []
+        print(f'self.skip_frames_inds = {self.skip_frames_inds}')
+
         # Call the corresponding methods based on checkbox selections
         if self.check_organize.isChecked():
             self.organize_files(path_input)
@@ -199,7 +214,7 @@ class MyWindow(QMainWindow):
         path_output = self.create_new_folder(path_input)
         
         # Create yaml file for image type
-        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True)
+        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True, frame_inds_to_skip=self.skip_frames_inds)
 #         print("\tCreated .yaml file")
 
         basename_list, is_nd = wcf.define_basename_list(
@@ -381,7 +396,8 @@ class MyWindow(QMainWindow):
             'seg_dic_version': 1,
             'seg_dic_visualize': False,
             'track_dic_visualize': False,
-            'track_pillars_dic': False
+            'track_pillars_dic': False,
+            'frame_inds_to_skip': self.skip_frames_inds
         }
 
         # Conditionally modify yaml file based on image_type input
@@ -509,9 +525,8 @@ class MyWindow(QMainWindow):
             print(f"\tData extracted to Excel file in {basename}.xlsx")
             
             # Move ph1_contour_all_*.png images from all samples into the same folder
-            dm.find_and_copy_contour_images(
-                path_output, basename, image_type
-            )
+            dm.conglomerate_segmentation_images(path_output, basename, image_type)
+            dm.conglomerate_pillar_disps_images(path_output, basename, image_type)
             print("\tDone extracting data!")
 
 

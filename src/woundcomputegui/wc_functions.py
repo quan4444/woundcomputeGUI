@@ -13,9 +13,10 @@ from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor,wait,FIRST
 from functools import partial
 import traceback
 import sys
+from typing import List
 
 
-def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool):
+def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool, frame_inds_to_skip: List):
     """Given the output path as string. Will create a yaml file in the main output folder. This yaml file will be
     copied into each subfolder during the sorting function"""
 
@@ -47,7 +48,8 @@ def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_
         'seg_dic_version': 1,
         'seg_dic_visualize': False,
         'track_dic_visualize': False,
-        'track_pillars_dic': False
+        'track_pillars_dic': False,
+        'frame_inds_to_skip': frame_inds_to_skip,
     }
 
     # Conditionally modify yaml file based on image_type input

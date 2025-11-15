@@ -37,6 +37,7 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
         tlist = [T * interval_in for T in range(0, frames)]
         folder_ind+=1
+    print(f'metrics = {metrics}')
 
     dfs = {}
 
@@ -86,46 +87,56 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
             if add_notes_pillar_pos:
                 notes_list = ["There are 2 tables in this sheet: one for x-positions, and one for y-positions.",
                               "Each cell contains the pillar positions for pillar 0, pillar 1, pillar 2, pillar 3 at a time frame.",
-                              "Pillar positions: pillar 0 is located bottom left, pillar 1 top left, pillar 2 top right, and pillar 3 bottom right. Sometimes, there are bugs that affect this pattern.",
+                              "Pillar positions: pillar 0 is located top left, pillar 1 bottom left, pillar 2 bottom right, and pillar 3 top right. Sometimes, there are bugs that affect this pattern.",
                               f"To verify the pillar positions for each sample, you can check the file 'pillar_positions.png' in the 'track_pillars_{image_type}' folder."]
                 add_notes_to_excel_by_rows(excel_output_path, notes_list, "pillar_positions")
 
-        elif header_name == "relative_pillar_distances_pair_names":
-            pair_name_list = []
-            for file in folder_path_list:
-                try:
-                    pillar_pairs = np.loadtxt(
-                        os.path.join(file.path, 'track_pillars_' + image_type, mp), dtype=str, comments=None
-                        )
-                    pillar_pairs_string = ', '.join(pillar_pairs)  # Convert to comma-separated string
-                    pair_name_list.append(pillar_pairs_string)
-                except Exception as e:
-                    print(e)
-
-        else:
-            if header_name == "relative_pillar_distances_smoothed_GPR":
-                header_name = "rel_pillar_dist_GPR"
+        elif header_name == "pillar_disps_actual" or header_name=="avg_pillar_disps_actual":
             dfs[header_name] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
-
             for file in folder_path_list:
                 try:
                     dfs[header_name][file.name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
                 except Exception as e:
                     print(e)
-
+            
             append_to_excel(excel_output_path, dfs[header_name], header_name)
 
-    if pair_name_list:
-        notes_list=["This row contains the pillar pair names, corresponding to the values in the cells below. 'p0-p1' means the relative distance between pillar 0 and pillar 1."]
-        add_notes_to_excel_by_rows(excel_output_path, notes_list, "relative_pillar_distances")
-        add_notes_to_excel_by_rows(excel_output_path, notes_list, "rel_pillar_dist_GPR")
-        for pair_ind,pair_name_str in enumerate(pair_name_list):
-            add_note_to_excel_by_cell(
-                excel_output_path, pair_name_str, "relative_pillar_distances", excel_row=1, excel_column=4+pair_ind
-                )
-            add_note_to_excel_by_cell(
-                excel_output_path, pair_name_str, "rel_pillar_dist_GPR", excel_row=1, excel_column=4+pair_ind
-                )
+        # elif header_name == "relative_pillar_distances_pair_names":
+        #     pair_name_list = []
+        #     for file in folder_path_list:
+        #         try:
+        #             pillar_pairs = np.loadtxt(
+        #                 os.path.join(file.path, 'track_pillars_' + image_type, mp), dtype=str, comments=None
+        #                 )
+        #             pillar_pairs_string = ', '.join(pillar_pairs)  # Convert to comma-separated string
+        #             pair_name_list.append(pillar_pairs_string)
+        #         except Exception as e:
+        #             print(e)
+
+        # else:
+        #     if header_name == "relative_pillar_distances_smoothed_GPR":
+        #         header_name = "rel_pillar_dist_GPR"
+        #     dfs[header_name] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
+
+        #     for file in folder_path_list:
+        #         try:
+        #             dfs[header_name][file.name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+        #         except Exception as e:
+        #             print(e)
+
+        #     append_to_excel(excel_output_path, dfs[header_name], header_name)
+
+    # if pair_name_list:
+    #     notes_list=["This row contains the pillar pair names, corresponding to the values in the cells below. 'p0-p1' means the relative distance between pillar 0 and pillar 1."]
+    #     add_notes_to_excel_by_rows(excel_output_path, notes_list, "relative_pillar_distances")
+    #     add_notes_to_excel_by_rows(excel_output_path, notes_list, "rel_pillar_dist_GPR")
+    #     for pair_ind,pair_name_str in enumerate(pair_name_list):
+    #         add_note_to_excel_by_cell(
+    #             excel_output_path, pair_name_str, "relative_pillar_distances", excel_row=1, excel_column=4+pair_ind
+    #             )
+    #         add_note_to_excel_by_cell(
+    #             excel_output_path, pair_name_str, "rel_pillar_dist_GPR", excel_row=1, excel_column=4+pair_ind
+    #             )
     return
 
 def append_to_excel(fpath, df, sheet_name, start_row_ind=0,sheet_exists_mode='replace'):
@@ -165,7 +176,7 @@ def add_note_to_excel_by_cell(fpath, note, sheet_name, excel_row, excel_column):
     wb.save(fpath)
     return
 
-def find_and_copy_contour_images(path_output, basename, image_type):
+def conglomerate_segmentation_images(path_output, basename, image_type):
     """
     Finds and copy contour images to a specific folder.
 
@@ -190,11 +201,11 @@ def find_and_copy_contour_images(path_output, basename, image_type):
             sample_vis_paths.append(fp)
             img_paths+=images
 
-    parent_dir = os.path.join(path_output, "visualize_all_samples")
+    parent_dir = os.path.join(path_output, "all_samples_segmentation_results")
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir, exist_ok=True)
 
-    basename_dir = os.path.join(path_output, "visualize_all_samples", basename)
+    basename_dir = os.path.join(path_output, "all_samples_segmentation_results", basename)
     if not os.path.exists(basename_dir):
         os.makedirs(basename_dir, exist_ok=True)
     
@@ -204,6 +215,48 @@ def find_and_copy_contour_images(path_output, basename, image_type):
         dest_path = os.path.join(basename_dir, image)
         if not os.path.exists(dest_path):
             shutil.copy2(src_path, dest_path)
+
+
+def conglomerate_pillar_disps_images(path_output, basename, image_type):
+    """
+    Finds and copy pillar disps images to a specific folder.
+
+    Parameters:
+    - path_output: str, path to the output directory
+    - basename: str, base name for the output files
+    - image_type: str, type of images (e.g., 'ph1')
+    """
+    image_type = match_image_type_formatting(image_type)
+    # Define the source and destination directories
+    if not os.path.exists(os.path.join(path_output, basename)):
+        print(f"Folder {basename} does not exist. Skipping visualization...")
+        return
+    folder_path_list = sorted(os.scandir(os.path.join(path_output, basename)), key=lambda x: x.name)
+    folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
+    sample_vis_paths = []
+    img_paths = []
+    for folder in folder_path_list:
+        fp = os.path.join(folder.path, "track_pillars_" + image_type)
+        images = [f for f in os.listdir(fp) if f.startswith("pillar_disps_and_pillar_contours")]
+        if images:
+            sample_vis_paths.append(fp)
+            img_paths+=images
+    # print(img_paths)
+    parent_dir = os.path.join(path_output, "all_samples_pillar_tracking_results")
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir, exist_ok=True)
+
+    basename_dir = os.path.join(path_output, "all_samples_pillar_tracking_results", basename)
+    if not os.path.exists(basename_dir):
+        os.makedirs(basename_dir, exist_ok=True)
+    
+    for img_ind,image in enumerate(img_paths):
+        src_path = sample_vis_paths[img_ind]
+        src_path = os.path.join(src_path, image)
+        dest_path = os.path.join(basename_dir, image)
+        if not os.path.exists(dest_path):
+            shutil.copy2(src_path, dest_path)
+
 
 def visualize_data(path_output_in, basename_in, image_type_in, all_data_in, metrics_in, positions_in, assigned_df_in):
     """
