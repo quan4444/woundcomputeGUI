@@ -172,15 +172,15 @@ class MyWindow(QMainWindow):
         self.status_label.setText("Processing...")
         QApplication.processEvents()  # Update the UI immediately
 
-        print(f'self.skip_frames_input = {self.skip_frames_input}')
-        print(f'self.skip_frames_input.text() = {self.skip_frames_input.text()}')
-        print(f'type(self.skip_frames_input.text()) = {type(self.skip_frames_input.text())}')
+        # print(f'self.skip_frames_input = {self.skip_frames_input}')
+        # print(f'self.skip_frames_input.text() = {self.skip_frames_input.text()}')
+        # print(f'type(self.skip_frames_input.text()) = {type(self.skip_frames_input.text())}')
         frame_inds_skip_str = self.skip_frames_input.text()
         if frame_inds_skip_str:
             self.skip_frames_inds = [int(x) for x in frame_inds_skip_str.split(',')] # test empty, 0, "00,01"
         else:
             self.skip_frames_inds = []
-        print(f'self.skip_frames_inds = {self.skip_frames_inds}')
+        # print(f'self.skip_frames_inds = {self.skip_frames_inds}')
 
         # Call the corresponding methods based on checkbox selections
         if self.check_organize.isChecked():

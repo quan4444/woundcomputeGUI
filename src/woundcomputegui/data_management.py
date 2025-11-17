@@ -37,7 +37,6 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
         tlist = [T * interval_in for T in range(0, frames)]
         folder_ind+=1
-    print(f'metrics = {metrics}')
 
     dfs = {}
 
