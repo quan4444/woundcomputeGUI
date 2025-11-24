@@ -345,8 +345,8 @@ def wc_process_folder(main_folder:str, cpu_threshold:int):
         print(f"Folder {main_folder} does not exist. Skipping...")
         return
     subfolders = [f for f in os.scandir(main_folder) if f.is_dir()]
-    print(f'main_folder = {main_folder}')
-    print(f'subfolders = {subfolders}')
+    # print(f'main_folder = {main_folder}')
+    # print(f'subfolders = {subfolders}')
 
     with ProcessPoolExecutor() as executor:
         futures = set()
