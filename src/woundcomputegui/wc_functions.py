@@ -368,7 +368,10 @@ def wc_process_folder(main_folder:str, cpu_threshold:int):
             available_cpu = cpu_threshold - cpu_usage
             if available_cpu > 0:
                 single_process_cpu = cpu_usage  # Assume single process usage equals measured CPU usage
-                max_processes = max(1, int(available_cpu / single_process_cpu) + 1)  # +1 to include the initial process
+                if single_process_cpu == 0:
+                    max_processes=1
+                else:
+                    max_processes = max(1, int(available_cpu / single_process_cpu) + 1)  # +1 to include the initial process
                 print(f'\tMaximum number of processes that can run: {max_processes}')
 
                 # Submit remaining subfolders based on calculated max processes
