@@ -16,7 +16,7 @@ import sys
 from typing import List
 
 
-def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool, frame_inds_to_skip: List):
+def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool, low_quality_frame_inds: List):
     """Given the output path as string. Will create a yaml file in the main output folder. This yaml file will be
     copied into each subfolder during the sorting function"""
 
@@ -49,7 +49,8 @@ def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_
         'seg_dic_visualize': False,
         'track_dic_visualize': False,
         'track_pillars_dic': False,
-        'frame_inds_to_skip': frame_inds_to_skip,
+        'run_before_injury_and_after_injury_together': True,
+        'low_quality_frame_inds': low_quality_frame_inds,
     }
 
     # Conditionally modify yaml file based on image_type input

@@ -93,9 +93,9 @@ class MyWindow(QMainWindow):
         form_layout.addRow(QLabel("Imaging interval (hours):"), self.imaging_interval)
 
         # 5. Frame indices to skip
-        self.skip_frames_input = QLineEdit()
-        self.skip_frames_input.setPlaceholderText("e.g., 0,1,2")
-        form_layout.addRow(QLabel("Frame indices to skip (comma-separated):"), self.skip_frames_input)
+        self.low_quality_frames_input = QLineEdit()
+        self.low_quality_frames_input.setPlaceholderText("e.g., 0,1,2")
+        form_layout.addRow(QLabel("Low quality frame indices (comma-separated):"), self.low_quality_frames_input)
 
         # 6. Four Checkboxes (QCheckBox)
         self.check_organize = QCheckBox("Organize .tif files and prepare .yaml files")
@@ -172,15 +172,12 @@ class MyWindow(QMainWindow):
         self.status_label.setText("Processing...")
         QApplication.processEvents()  # Update the UI immediately
 
-        # print(f'self.skip_frames_input = {self.skip_frames_input}')
-        # print(f'self.skip_frames_input.text() = {self.skip_frames_input.text()}')
-        # print(f'type(self.skip_frames_input.text()) = {type(self.skip_frames_input.text())}')
-        frame_inds_skip_str = self.skip_frames_input.text()
+        frame_inds_skip_str = self.low_quality_frames_input.text()
         if frame_inds_skip_str:
-            self.skip_frames_inds = [int(x) for x in frame_inds_skip_str.split(',')] # test empty, 0, "00,01"
+            self.low_quality_frame_inds = [int(x) for x in frame_inds_skip_str.split(',')] # test empty, 0, "00,01"
         else:
-            self.skip_frames_inds = []
-        # print(f'self.skip_frames_inds = {self.skip_frames_inds}')
+            self.low_quality_frame_inds = []
+        # print(f'self.low_quality_frame_inds = {self.low_quality_frame_inds}')
 
         # Call the corresponding methods based on checkbox selections
         if self.check_organize.isChecked():
@@ -214,7 +211,7 @@ class MyWindow(QMainWindow):
         path_output = self.create_new_folder(path_input)
         
         # Create yaml file for image type
-        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True, frame_inds_to_skip=self.skip_frames_inds)
+        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True, low_quality_frame_inds=self.low_quality_frame_inds)
 #         print("\tCreated .yaml file")
 
         basename_list, is_nd = wcf.define_basename_list(
@@ -397,7 +394,8 @@ class MyWindow(QMainWindow):
             'seg_dic_visualize': False,
             'track_dic_visualize': False,
             'track_pillars_dic': False,
-            'frame_inds_to_skip': self.skip_frames_inds
+            'run_before_injury_and_after_injury_together': True,
+            'low_quality_frame_inds': self.low_quality_frame_inds
         }
 
         # Conditionally modify yaml file based on image_type input
