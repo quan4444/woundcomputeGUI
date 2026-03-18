@@ -32,7 +32,9 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
     metrics = []
     folder_ind=0
     while metrics == [] and folder_ind < len(folder_path_list):
-        frames = len(os.listdir(os.path.join(folder_path_list[folder_ind].path, image_type + "_images")))
+        # frames = len(os.listdir(os.path.join(folder_path_list[folder_ind].path, image_type + "_images")))
+        frames = len(np.loadtxt(os.path.join(folder_path_list[folder_ind].path, "segment_"+image_type,"is_broken_vs_frame.txt")))
+        print(f"new frames = {frames}")
         metrics = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "segment_" + image_type)) if f.endswith(".txt")]
         metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
         tlist = [T * interval_in for T in range(0, frames)]
@@ -61,34 +63,49 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         excel_output_path = os.path.join(path_input_fn, 'code_output_' + basename_fn + '.xlsx')
         print(f"\tExtracting data for {header_name}...")
 
-        if header_name == "pillar_tracker_x" or header_name == "pillar_tracker_y":
-
-            if "pillar_positions" not in dfs:
-                start_row_ind = 0
-                sheet_exists_mode = 'replace'
-                add_notes_pillar_pos = False
-            else:
-                start_row_ind = len(dfs["pillar_positions"]) + 1
-                sheet_exists_mode = 'overlay'
-                add_notes_pillar_pos = True
-
-            dfs["pillar_positions"] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
-
-            position_name = "_"+header_name[-1] + "_position"
+        if header_name == "pillar_tracker_x":  # single pass triggered on x; y is read here too
+            rows = []
             for file in folder_path_list:
+                mp_x = mp
+                mp_y = mp.replace("pillar_tracker_x", "pillar_tracker_y")
                 try:
-                    dfs["pillar_positions"][file.name+position_name] = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+                    df_x = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp_x), header=None)
+                    df_y = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp_y), header=None)
+
+                    for frame_idx in range(frames):
+                        x_vals = str(df_x.iloc[frame_idx, 0]).split()
+                        y_vals = str(df_y.iloc[frame_idx, 0]).split()
+                        n_pillars = min(len(x_vals), len(y_vals))
+                        if len(x_vals) != len(y_vals):
+                            print(f"Pillar count mismatch for {file.name}, frame {frame_idx + 1}: "
+                                f"{len(x_vals)} x-values vs {len(y_vals)} y-values — using first {n_pillars}.")
+                        for pillar in range(n_pillars):
+                            try:
+                                rows.append({
+                                    'Sample': file.name,
+                                    'Frame': frame_idx + 1,
+                                    'Time': tlist[frame_idx],
+                                    'Pillar': pillar,
+                                    'X': float(x_vals[pillar]),
+                                    'Y': float(y_vals[pillar]),
+                                })
+                            except ValueError:
+                                print(f"Invalid value for {file.name}, frame {frame_idx + 1}, pillar {pillar} — skipping.")
                 except Exception as e:
                     print(e)
 
-            append_to_excel(excel_output_path, dfs["pillar_positions"], "pillar_positions", start_row_ind,sheet_exists_mode)
+            dfs["pillar_positions"] = pd.DataFrame(rows, columns=['Sample', 'Frame', 'Time', 'Pillar', 'X', 'Y'])
+            append_to_excel(excel_output_path, dfs["pillar_positions"], "pillar_positions", 0, 'replace')
 
-            if add_notes_pillar_pos:
-                notes_list = ["There are 2 tables in this sheet: one for x-positions, and one for y-positions.",
-                              "Each cell contains the pillar positions for pillar 0, pillar 1, pillar 2, pillar 3 at a time frame.",
-                              "Pillar positions: pillar 0 is located top left, pillar 1 bottom left, pillar 2 bottom right, and pillar 3 top right. Sometimes, there are bugs that affect this pattern.",
-                              f"To verify the pillar positions for each sample, you can check the file 'pillar_positions.png' in the 'track_pillars_{image_type}' folder."]
-                add_notes_to_excel_by_rows(excel_output_path, notes_list, "pillar_positions")
+            notes_list = [
+                "This sheet is in tidy/long format: one row per pillar per frame per sample.",
+                "Pillar IDs: 0 = top left, 1 = top right, 2 = bottom right, 3 = bottom left. Bugs may occasionally affect this pattern.",
+                f"To verify pillar positions for each sample, check 'pillar_positions.png' in the 'track_pillars_{image_type}' folder."
+            ]
+            add_notes_to_excel_by_rows(excel_output_path, notes_list, "pillar_positions")
+
+        elif header_name == "pillar_tracker_y":
+            pass  # handled in the x pass above
 
         elif header_name == "pillar_disps_actual" or header_name=="avg_pillar_disps_actual":
             dfs[header_name] = pd.DataFrame({'Frame': range(1, frames + 1), 'Time': tlist})
@@ -99,6 +116,41 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
                     print(e)
             
             append_to_excel(excel_output_path, dfs[header_name], header_name)
+        
+        elif header_name == "disp_pillar_dist_to_centroid":
+            sheet_name = "disp_pillar_dist_to_centroid"
+            rows = []
+            for file in folder_path_list:
+                try:
+                    df = pd.read_table(os.path.join(file.path, 'track_pillars_' + image_type, mp), header=None)
+
+                    for frame_idx in range(frames):
+                        vals = str(df.iloc[frame_idx, 0]).split()
+                        for pillar in range(len(vals)):
+                            try:
+                                rows.append({
+                                    'Sample': file.name,
+                                    'Frame': frame_idx + 1,
+                                    'Time': tlist[frame_idx],
+                                    'Pillar': pillar,
+                                    'Displacement': float(vals[pillar]),
+                                })
+                            except ValueError:
+                                print(f"Invalid value for {file.name}, frame {frame_idx + 1}, pillar {pillar} — skipping.")
+                except Exception as e:
+                    print(e)
+
+            dfs[sheet_name] = pd.DataFrame(rows, columns=['Sample', 'Frame', 'Time', 'Pillar', 'Displacement'])
+            append_to_excel(excel_output_path, dfs[sheet_name], sheet_name, 0, 'replace')
+
+            notes_list = [
+                "This sheet is in tidy/long format: one row per pillar per frame per sample.",
+                "Each 'Displacement' value is the displacement of a pillar's distance to the centroid of all pillars.",
+                "Pillar IDs: 0 = top left, 1 = top right, 2 = bottom right, 3 = bottom left. Bugs may occasionally affect this pattern.",
+                f"To verify pillar positions for each sample, check 'pillar_positions.png' in the 'track_pillars_{image_type}' folder."
+            ]
+            add_notes_to_excel_by_rows(excel_output_path, notes_list, sheet_name)
+
 
         # elif header_name == "relative_pillar_distances_pair_names":
         #     pair_name_list = []

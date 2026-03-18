@@ -172,9 +172,9 @@ class MyWindow(QMainWindow):
         self.status_label.setText("Processing...")
         QApplication.processEvents()  # Update the UI immediately
 
-        frame_inds_skip_str = self.low_quality_frames_input.text()
-        if frame_inds_skip_str:
-            self.low_quality_frame_inds = [int(x) for x in frame_inds_skip_str.split(',')] # test empty, 0, "00,01"
+        low_quality_inds_str = self.low_quality_frames_input.text()
+        if low_quality_inds_str:
+            self.low_quality_frame_inds = [int(x) for x in low_quality_inds_str.split(',')] # test empty, 0, "00,01"
         else:
             self.low_quality_frame_inds = []
         # print(f'self.low_quality_frame_inds = {self.low_quality_frame_inds}')
@@ -190,6 +190,7 @@ class MyWindow(QMainWindow):
         if self.check_run_wc.isChecked():
             self.run_wound_compute()
         elif self.check_extract_data.isChecked(): #  or self.check_visualize.isChecked()
+            print(f"basename_list={self.basename_list}")
             self.check_for_segmentation(self.path_output, self.basename_list[0])
 
         if self.check_extract_data.isChecked():
@@ -461,7 +462,6 @@ class MyWindow(QMainWindow):
         folder_path_list = sorted(os.scandir(basename_path), key=lambda x: x.name)
         folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
 
-        frames = len(os.listdir(os.path.join(folder_path_list[0].path, image_type + "_images")))
         try:
             metrics = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "segment_" + image_type)) if f.endswith(".txt")]
         except:
