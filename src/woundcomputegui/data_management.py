@@ -35,8 +35,8 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
         # frames = len(os.listdir(os.path.join(folder_path_list[folder_ind].path, image_type + "_images")))
         frames = len(np.loadtxt(os.path.join(folder_path_list[folder_ind].path, "segment_"+image_type,"is_broken_vs_frame.txt")))
         print(f"new frames = {frames}")
-        metrics = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "segment_" + image_type)) if f.endswith(".txt")]
-        metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt")]
+        metrics = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "segment_" + image_type)) if f.endswith(".txt") and not f.endswith("GPR.txt")]
+        metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt") and not f.endswith("GPR.txt")]
         tlist = [T * interval_in for T in range(0, frames)]
         folder_ind+=1
 
