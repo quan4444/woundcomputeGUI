@@ -117,8 +117,8 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
             
             append_to_excel(excel_output_path, dfs[header_name], header_name)
         
-        elif header_name == "disp_pillar_dist_to_centroid":
-            sheet_name = "disp_pillar_dist_to_centroid"
+        elif header_name == "change_in_pillar_distance_from_centroid":
+            sheet_name = "change_in_pillar_distance_from_centroid"
             rows = []
             for file in folder_path_list:
                 try:
@@ -133,14 +133,14 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
                                     'Frame': frame_idx + 1,
                                     'Time': tlist[frame_idx],
                                     'Pillar': pillar,
-                                    'Displacement': float(vals[pillar]),
+                                    'Change_dist_from_centroid': float(vals[pillar]),
                                 })
                             except ValueError:
                                 print(f"Invalid value for {file.name}, frame {frame_idx + 1}, pillar {pillar} — skipping.")
                 except Exception as e:
                     print(e)
 
-            dfs[sheet_name] = pd.DataFrame(rows, columns=['Sample', 'Frame', 'Time', 'Pillar', 'Displacement'])
+            dfs[sheet_name] = pd.DataFrame(rows, columns=['Sample', 'Frame', 'Time', 'Pillar', 'Change_dist_from_centroid'])
             append_to_excel(excel_output_path, dfs[sheet_name], sheet_name, 0, 'replace')
 
             notes_list = [

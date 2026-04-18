@@ -319,21 +319,21 @@ def wc_run(input_path_fn: str):
     # ** Section 3: Execute woundcompute for all basename folders in the Sorted folder ** #
     time_all = []
     current = time.time()
-    try:
-        time_all, action_all = ia.run_all(Path(input_path_fn))
-        secondsPassed = time.time() - current
-        print("\tProcessing: ", input_path_fn, "  Tissue: ", os.path.basename(os.path.normpath(input_path_fn)), "     time: ",
+    # ~ try:
+    time_all, action_all = ia.run_all(Path(input_path_fn))
+    secondsPassed = time.time() - current
+    print("\tProcessing: ", input_path_fn, "  Tissue: ", os.path.basename(os.path.normpath(input_path_fn)), "     time: ",
                 format_timespan(secondsPassed))
-    except Exception as ex:
-        time_all.append(time.time())
-        print("---------ERROR OF SOME DESCRIPTION HAS HAPPENED-------")
-        print("\tPath: ", input_path_fn, "    Tissue: ", os.path.basename(os.path.normpath(input_path_fn)), "     time: ",
-                  time.ctime())
-        print(ex)
-        print("There is a good chance that the error occurs due to empty folder or poor image quality resulting in null segmentation. This should not affect the processing of other folders.")
-        # print("An error occurred:", file=sys.stderr)
-        # traceback.print_exc(file=sys.stderr)
-        print("------------------------------------------------------")
+    # ~ except Exception as ex:
+        # ~ time_all.append(time.time())
+        # ~ print("---------ERROR OF SOME DESCRIPTION HAS HAPPENED-------")
+        # ~ print("\tPath: ", input_path_fn, "    Tissue: ", os.path.basename(os.path.normpath(input_path_fn)), "     time: ",
+                  # ~ time.ctime())
+        # ~ print(ex)
+        # ~ print("There is a good chance that the error occurs due to empty folder or poor image quality resulting in null segmentation. This should not affect the processing of other folders.")
+        # ~ # print("An error occurred:", file=sys.stderr)
+        # ~ # traceback.print_exc(file=sys.stderr)
+        # ~ print("------------------------------------------------------")
 
 
 # Parallel Processing handlers

@@ -251,6 +251,7 @@ class MyWindow(QMainWindow):
         
         #  Sort images in each basename folder into their corresponding stage position folders
         print("\tSorting images in each basename folder into their corresponding stage position folders...")
+        print(f'stage_pos_maps = {stage_pos_maps}')
         wcf.efficient_sort_stage_pos(
             basename_list, path_output, stage_pos_maps, image_type, self.microscope_type, is_nd
         )
