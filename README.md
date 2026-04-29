@@ -1,6 +1,6 @@
 # Wound Compute Graphical User Interface (GUI)
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.ZENODO_RECORD_ID.svg)](https://doi.org/10.5281/zenodo.ZENODO_RECORD_ID)
+[![DOI](https://zenodo.org/badge/989760441.svg)](https://doi.org/10.5281/zenodo.19896937)
 ![os](https://img.shields.io/badge/os-ubuntu%20|%20macos%20|%20windows-blue.svg)
 
 
