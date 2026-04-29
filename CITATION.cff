@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "WoundCompute GUI"
+authors:
+  - family-names: Nguyen
+    given-names: Quan
+    email: quan@bu.edu
+    affiliation: Boston University
+  - family-names: Vasan
+    given-names: Anish
+    email: avasan@bu.edu
+    affiliation: Boston University
+  - family-names: Lejeune
+    given-names: Emma
+    email: elejeune@bu.edu
+    affiliation: Boston University
+version: 1.0.0
+date-released: 2026-04-29
+url: "https://github.com/quan4444/woundcomputeGUI"
+repository-code: "https://github.com/quan4444/woundcomputeGUI"
+license: MIT

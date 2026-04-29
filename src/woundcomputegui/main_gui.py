@@ -29,7 +29,7 @@ import woundcomputegui.data_management as dm
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Wound Compute")
+        self.setWindowTitle("WoundCompute")
         self.setGeometry(100, 100, 540, 250)
         self.overlay = None
         self.basename_list = None
@@ -59,6 +59,9 @@ class MyWindow(QMainWindow):
 
         # Use a form layout for other widgets
         form_layout = QFormLayout()
+        form_layout.setLabelAlignment(Qt.AlignLeft)
+        form_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form_layout.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
 
         # 2. Drop-down list (ComboBox) with description
         self.microscope_type = QComboBox()
@@ -97,9 +100,14 @@ class MyWindow(QMainWindow):
         self.low_quality_frames_input.setPlaceholderText("e.g., 0,1,2")
         form_layout.addRow(QLabel("Low quality frame indices (comma-separated):"), self.low_quality_frames_input)
 
+        # 6. Run before injury and after injury together
+        self.run_before_after_combo = QComboBox()
+        self.run_before_after_combo.addItems(["True", "False"])
+        form_layout.addRow(QLabel("Run before injury and after injury data together:"), self.run_before_after_combo)
+
         # 6. Four Checkboxes (QCheckBox)
         self.check_organize = QCheckBox("Organize .tif files and prepare .yaml files")
-        self.check_run_wc = QCheckBox("Run Wound Compute in parallel")
+        self.check_run_wc = QCheckBox("Run WoundCompute in parallel")
         self.check_extract_data = QCheckBox("Extract metadata")
         # self.check_visualize = QCheckBox("Visualize data")
 
@@ -177,6 +185,8 @@ class MyWindow(QMainWindow):
             self.low_quality_frame_inds = [int(x) for x in low_quality_inds_str.split(',')] # test empty, 0, "00,01"
         else:
             self.low_quality_frame_inds = []
+
+        self.run_before_injury_and_after_injury_together = self.run_before_after_combo.currentText() == "True"
         # print(f'self.low_quality_frame_inds = {self.low_quality_frame_inds}')
 
         # Call the corresponding methods based on checkbox selections
@@ -187,14 +197,30 @@ class MyWindow(QMainWindow):
             self.check_yaml_files()
 
 
+        # Resolve compiled-mode intent against disk state before any downstream
+        # step uses it. Only meaningful when Extract is reading existing data
+        # (i.e., Run WC isn't about to create the compiled folder).
+        if self.check_extract_data.isChecked() and not self.check_run_wc.isChecked():
+            effective_use_compiled = self._resolve_compiled_mode(self.basename_list, self.path_output)
+            if effective_use_compiled is None:
+                print("Extract Metadata cancelled by user.")
+                self.status_label.setText("Ready")
+                self.hide_overlay()
+                return
+        else:
+            effective_use_compiled = self.run_before_injury_and_after_injury_together
+
         if self.check_run_wc.isChecked():
             self.run_wound_compute()
         elif self.check_extract_data.isChecked(): #  or self.check_visualize.isChecked()
             print(f"basename_list={self.basename_list}")
-            self.check_for_segmentation(self.path_output, self.basename_list[0])
+            seg_basename = self.basename_list[0]
+            if effective_use_compiled and seg_basename.endswith('_ai'):
+                seg_basename = seg_basename[:-len('_ai')] + '_compiled'
+            self.check_for_segmentation(self.path_output, seg_basename)
 
         if self.check_extract_data.isChecked():
-            self.extract_metadata()
+            self.extract_metadata(effective_use_compiled)
 
         # if self.check_visualize.isChecked():
         #     self.visualize_data()
@@ -212,7 +238,7 @@ class MyWindow(QMainWindow):
         path_output = self.create_new_folder(path_input)
         
         # Create yaml file for image type
-        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True, low_quality_frame_inds=self.low_quality_frame_inds)
+        wcf.create_wc_yaml(path_output, image_type_in=image_type, is_fl_in=False, is_pillars_in=True, low_quality_frame_inds=self.low_quality_frame_inds, run_before_injury_and_after_injury_together=self.run_before_injury_and_after_injury_together)
 #         print("\tCreated .yaml file")
 
         basename_list, is_nd = wcf.define_basename_list(
@@ -396,7 +422,7 @@ class MyWindow(QMainWindow):
             'seg_dic_visualize': False,
             'track_dic_visualize': False,
             'track_pillars_dic': False,
-            'run_before_injury_and_after_injury_together': True,
+            'run_before_injury_and_after_injury_together': self.run_before_injury_and_after_injury_together,
             'low_quality_frame_inds': self.low_quality_frame_inds
         }
 
@@ -434,22 +460,30 @@ class MyWindow(QMainWindow):
 
             
     def run_wound_compute(self):
-        """Run Wound Compute in parallel."""
-        print("Running Wound Compute...")
+        """Run WoundCompute in parallel."""
+        print("Running WoundCompute...")
         basename_list = self.basename_list
         path_output = self.path_output
 
         time_start = time.time()
-        print("\tStarting wound compute for each experiment folder...")
+        print("\tStarting WoundCompute for each experiment folder...")
         print("\tStart time:", time.ctime())
 
         for index, basename in enumerate(basename_list):
+            if self.run_before_injury_and_after_injury_together and basename.endswith('_bi'):
+                print(f"\tSkipping {basename}: handled inside the compiled folder during the *_ai pass.")
+                continue
             print("\tProcessing folder:", basename)
-            wcf.wc_process_folder(os.path.join(path_output, basename), self.max_cpu_usage_percent.value())
+            try:
+                wcf.wc_process_folder(os.path.join(path_output, basename), self.max_cpu_usage_percent.value())
+            except Exception as e:
+                import traceback
+                print(f"\tERROR processing {basename}: {e}")
+                traceback.print_exc()
 
         print("\tEnd time:", time.ctime())
         print("\tTotal time taken:", format_timespan(time.time() - time_start))
-        print("\tDone running Wound Compute!")
+        print("\tDone running WoundCompute!")
 
 
     def check_for_segmentation(self,path_input_fn:str, basename_fn:str):
@@ -467,23 +501,99 @@ class MyWindow(QMainWindow):
             metrics = [f for f in os.listdir(os.path.join(folder_path_list[0].path, "segment_" + image_type)) if f.endswith(".txt")]
         except:
             QMessageBox.critical(self, "Error",
-                                 "Cannot find folder containing segmented images. Please run again and check the 'Run Wound Compute' option."
+                                 "Cannot find folder containing segmented images. Please run again and check the 'Run WoundCompute' option."
                                 )
             self.status_label.setText("Ready")
             self.hide_overlay()
             return
 
 
-    def extract_metadata(
-        self
-    ):
-        """Extract metadata."""
+    def _resolve_compiled_mode(self, basename_list, path_output):
+        """Reconcile the dropdown choice with what's on disk.
+
+        Returns True/False to drive Extract Metadata, or None if the user cancelled.
+        """
+        flag = self.run_before_injury_and_after_injury_together
+
+        found_compiled = []
+        missing_compiled = []
+        for bn in basename_list:
+            if bn.endswith('_ai'):
+                compiled_name = bn[:-len('_ai')] + '_compiled'
+                if os.path.isdir(os.path.join(path_output, compiled_name)):
+                    found_compiled.append(compiled_name)
+                else:
+                    missing_compiled.append(compiled_name)
+
+        if not flag and found_compiled:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Compiled folder detected")
+            msg.setText(
+                "The 'Run before injury and after injury data together' dropdown is set to "
+                "<b>False</b>, but the following compiled folder(s) exist on disk:"
+                "<ul>"
+                + "".join(f"<li>{name}</li>" for name in found_compiled)
+                + "</ul>"
+                "Which folders should Extract Metadata read from?"
+            )
+            btn_compiled = msg.addButton("Extract from compiled folder", QMessageBox.AcceptRole)
+            btn_separate = msg.addButton("Extract from *_ai and *_bi folders", QMessageBox.AcceptRole)
+            msg.addButton("Cancel", QMessageBox.RejectRole)
+            msg.exec_()
+            clicked = msg.clickedButton()
+            if clicked is btn_compiled:
+                return True
+            if clicked is btn_separate:
+                return False
+            return None
+
+        if flag and missing_compiled:
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Compiled folder missing")
+            msg.setText(
+                "The 'Run before injury and after injury data together' dropdown is set to "
+                "<b>True</b>, but the following compiled folder(s) are missing on disk:"
+                "<ul>"
+                + "".join(f"<li>{name}</li>" for name in missing_compiled)
+                + "</ul>"
+                "Which folders should Extract Metadata read from?"
+            )
+            btn_separate = msg.addButton("Extract from *_ai and *_bi folders", QMessageBox.AcceptRole)
+            msg.addButton("Cancel", QMessageBox.RejectRole)
+            msg.exec_()
+            clicked = msg.clickedButton()
+            if clicked is btn_separate:
+                return False
+            return None
+
+        return flag
+
+
+    def extract_metadata(self, use_compiled: bool):
+        """Extract metadata. `use_compiled` is resolved upstream in run_process."""
         print("Extracting metadata...")
         imaging_interval = self.imaging_interval.value()
         path_output = self.path_output
         basename_list = self.basename_list
         stage_pos_maps = self.stage_pos_maps
         image_type = self.image_type
+
+        if use_compiled:
+            compiled_list = []
+            for bn in basename_list:
+                if bn.endswith('_ai'):
+                    compiled_bn = bn[:-len('_ai')] + '_compiled'
+                    compiled_list.append(compiled_bn)
+                    if compiled_bn not in stage_pos_maps:
+                        stage_pos_maps[compiled_bn] = stage_pos_maps.get(bn, {})
+                elif bn.endswith('_bi'):
+                    continue
+                else:
+                    compiled_list.append(bn)
+            basename_list = compiled_list
+            print(f"\tCompiled-mode basename list: {basename_list}")
 
         for index, basename in enumerate(basename_list):
 
@@ -667,7 +777,7 @@ class VisualizationWindow(QDialog):
         image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
-            if file.endswith(".TIF") or file.endswith(".tif"):
+            if file.lower().endswith((".tif", ".tiff")):
                 image_path = os.path.join(image_folder, file)
                 image = Image.open(image_path)
                 # Convert PIL Image to QPixmap
@@ -688,7 +798,7 @@ class VisualizationWindow(QDialog):
         image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
-            if file.endswith(".TIF") or file.endswith(".tif"):
+            if file.lower().endswith((".tif", ".tiff")):
                 image_path = os.path.join(image_folder, file)
                 image = Image.open(image_path)
                 self.images.append(image)
@@ -739,7 +849,7 @@ class VisualizationWindow(QDialog):
         image_folder = os.path.join(self.path_output, basename, sample, f"{image_type}_images")
         self.images = []
         for file in sorted(os.listdir(image_folder)):
-            if file.endswith(".TIF") or file.endswith(".tif"):
+            if file.lower().endswith((".tif", ".tiff")):
                 image_path = os.path.join(image_folder, file)
                 image = Image.open(image_path)
                 self.images.append(image)
@@ -801,7 +911,7 @@ class VisualizationWindow(QDialog):
         wound_masks = []
 
         for file in sorted(os.listdir(image_folder)):
-            if file.endswith((".TIF", ".tif")):
+            if file.lower().endswith((".tif", ".tiff")):
                 image_path = os.path.join(image_folder, file)
                 image = Image.open(image_path)
                 images.append(image)
@@ -983,7 +1093,7 @@ class VisualizationWindow(QDialog):
             wound_masks = []
 
             for file in sorted(os.listdir(image_folder)):
-                if file.endswith((".TIF", ".tif")):
+                if file.lower().endswith((".tif", ".tiff")):
                     image_path = os.path.join(image_folder, file)
                     image = Image.open(image_path)
                     images.append(image)

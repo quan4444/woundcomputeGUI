@@ -5,9 +5,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "woundcomputegui"
-version = "0.0.0"
+version = "1.0.0"
 authors = [
-  { name="Quan Nguyen, Anish Vasan", email="quan@bu.edu" },
+  { name="Quan Nguyen", email="quan@bu.edu" },
+  { name="Anish Vasan", email="avasan@bu.edu" },
+  { name="Emma Lejeune", email="elejeune@bu.edu" },
 ]
 description = "woundcompute gui"
 readme = "README.md"
@@ -19,7 +21,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "woundcompute @ git+https://github.com/elejeune11/woundcompute.git",
+    "woundcompute @ git+https://github.com/elejeune11/woundcompute.git@v1.0.0",
     "pandas",
     "humanfriendly",
     "openpyxl",

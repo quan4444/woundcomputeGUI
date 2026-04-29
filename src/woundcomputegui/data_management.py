@@ -33,7 +33,7 @@ def extract_data(path_input_fn: str, basename_fn: str, image_type: str, interval
     folder_ind=0
     while metrics == [] and folder_ind < len(folder_path_list):
         # frames = len(os.listdir(os.path.join(folder_path_list[folder_ind].path, image_type + "_images")))
-        frames = len(np.loadtxt(os.path.join(folder_path_list[folder_ind].path, "segment_"+image_type,"is_broken_vs_frame.txt")))
+        frames = len(np.loadtxt(os.path.join(folder_path_list[folder_ind].path, "segment_"+image_type,"is_broken_vs_frame.txt"), ndmin=1))
         print(f"new frames = {frames}")
         metrics = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "segment_" + image_type)) if f.endswith(".txt") and not f.endswith("GPR.txt")]
         metrics_pillars = [f for f in os.listdir(os.path.join(folder_path_list[folder_ind].path, "track_pillars_" + image_type)) if f.endswith(".txt") and not f.endswith("GPR.txt")]
@@ -284,29 +284,22 @@ def conglomerate_pillar_disps_images(path_output, basename, image_type):
         return
     folder_path_list = sorted(os.scandir(os.path.join(path_output, basename)), key=lambda x: x.name)
     folder_path_list = [n1 for n1 in folder_path_list if os.path.isdir(n1)]
-    sample_vis_paths = []
-    img_paths = []
+
+    parent_dir = os.path.join(path_output, "all_samples_pillar_tracking_results")
+    os.makedirs(parent_dir, exist_ok=True)
+    basename_dir = os.path.join(parent_dir, basename)
+    os.makedirs(basename_dir, exist_ok=True)
+
     for folder in folder_path_list:
         fp = os.path.join(folder.path, "track_pillars_" + image_type)
-        images = [f for f in os.listdir(fp) if f.startswith("pillar_disps_and_pillar_contours")]
-        if images:
-            sample_vis_paths.append(fp)
-            img_paths+=images
-    # print(img_paths)
-    parent_dir = os.path.join(path_output, "all_samples_pillar_tracking_results")
-    if not os.path.exists(parent_dir):
-        os.makedirs(parent_dir, exist_ok=True)
-
-    basename_dir = os.path.join(path_output, "all_samples_pillar_tracking_results", basename)
-    if not os.path.exists(basename_dir):
-        os.makedirs(basename_dir, exist_ok=True)
-    
-    for img_ind,image in enumerate(img_paths):
-        src_path = sample_vis_paths[img_ind]
-        src_path = os.path.join(src_path, image)
-        dest_path = os.path.join(basename_dir, image)
-        if not os.path.exists(dest_path):
-            shutil.copy2(src_path, dest_path)
+        if not os.path.isdir(fp):
+            continue
+        images = [f for f in os.listdir(fp) if f.startswith("change_in_pillar_distance_from_centroid")]
+        for image in images:
+            src_path = os.path.join(fp, image)
+            dest_path = os.path.join(basename_dir, image)
+            if not os.path.exists(dest_path):
+                shutil.copy2(src_path, dest_path)
 
 
 def visualize_data(path_output_in, basename_in, image_type_in, all_data_in, metrics_in, positions_in, assigned_df_in):

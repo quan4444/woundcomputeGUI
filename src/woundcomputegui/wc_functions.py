@@ -16,7 +16,7 @@ import sys
 from typing import List
 
 
-def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool, low_quality_frame_inds: List):
+def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_in: bool, low_quality_frame_inds: List, run_before_injury_and_after_injury_together: bool = False):
     """Given the output path as string. Will create a yaml file in the main output folder. This yaml file will be
     copied into each subfolder during the sorting function"""
 
@@ -49,7 +49,7 @@ def create_wc_yaml(path_in: str, image_type_in: str, is_fl_in: bool, is_pillars_
         'seg_dic_visualize': False,
         'track_dic_visualize': False,
         'track_pillars_dic': False,
-        'run_before_injury_and_after_injury_together': True,
+        'run_before_injury_and_after_injury_together': run_before_injury_and_after_injury_together,
         'low_quality_frame_inds': low_quality_frame_inds,
     }
 
@@ -120,8 +120,23 @@ def define_basename_list(path_input_fn: str, path_output_fn: str, ms_choice: str
 
         if not is_nd_out:
             file_list = os.listdir(path_input_fn)
-            basename = [file.split('_') for file in file_list if file.endswith('.tif') or file.endswith('.TIF')]
-            basename = list(dict.fromkeys(["_".join([str(item1) for item1 in item[0:-2]]) for item in basename]))
+            tif_files = [f for f in file_list if f.lower().endswith(('.tif', '.tiff'))]
+
+            coord_pattern = re.compile(r'^[A-Za-z]\d+$')
+            basenames_per_file = []
+            for tif in tif_files:
+                stem, _ = os.path.splitext(tif)
+                tokens = stem.split('_')
+                idx = len(tokens)
+                while idx > 0 and coord_pattern.match(tokens[idx - 1]):
+                    idx -= 1
+                if idx == 0:
+                    print(f"\tWARNING: '{tif}' has no non-coordinate segments; using first token '{tokens[0]}' as basename.")
+                    basenames_per_file.append(tokens[0])
+                else:
+                    basenames_per_file.append('_'.join(tokens[:idx]))
+
+            basename = list(dict.fromkeys(basenames_per_file))
             basename_list_fn = [b for b in basename if 'thumb' not in b]
 
     write_to_sp_yaml(path_output_fn, basename_list_fn, 'basename_list')
@@ -162,7 +177,7 @@ def sort_basename_folders(basename_list_fn: list, path_input_fn: str, path_outpu
             path_temp = os.path.join(path_input_fn, basename_fn)
 
             # Get all .tif files
-            tif_files = [file for file in os.scandir(path_temp) if file.name.lower().endswith('.tif')]
+            tif_files = [file for file in os.scandir(path_temp) if file.name.lower().endswith(('.tif', '.tiff'))]
 
             # for file in os.listdir(path_temp):
             #     if file.endswith('.tif' or '.TIF'):
@@ -246,7 +261,7 @@ def extract_nd_info(basename_list_fn: list, path_output_fn: str, is_nd: bool, ms
 
 def move_rename_files(file, basename_fn: str, parent_output_fn: str,
                       stage_pos_maps_fn: dict, image_type_fn: str, ms_choice: str, is_nd: bool):
-    if not file.lower().endswith('.tif'):
+    if not file.lower().endswith(('.tif', '.tiff')):
         return f"Skipped non-TIF file: {file}"
 
     timepoint_pattern = r't(\d+)'
@@ -305,7 +320,7 @@ def efficient_sort_stage_pos(basename_list_fn: list, parent_output_fn: str,
         for basename_fn in basename_list_fn:
             print(f'\tProcessing basename: {basename_fn}')
             file_list = [entry.name for entry in os.scandir(os.path.join(parent_output_fn, basename_fn))
-                         if entry.is_file() and entry.name.lower().endswith('.tif')]
+                         if entry.is_file() and entry.name.lower().endswith(('.tif', '.tiff'))]
             print(f'\tFound {len(file_list)} TIF files for {basename_fn}')
 
             # Use list() to force execution of all tasks
@@ -336,18 +351,14 @@ def wc_run(input_path_fn: str):
         # ~ print("------------------------------------------------------")
 
 
-# Parallel Processing handlers
-def get_cpu_usage():
-    return psutil.cpu_percent(interval=5, percpu=False)
-
-
 def wc_process_folder(main_folder:str, cpu_threshold:int):
     if not os.path.exists(main_folder):
         print(f"Folder {main_folder} does not exist. Skipping...")
         return
     subfolders = [f for f in os.scandir(main_folder) if f.is_dir()]
-    # print(f'main_folder = {main_folder}')
-    # print(f'subfolders = {subfolders}')
+
+    cpu_count = psutil.cpu_count() or 1
+    max_processes = 1
 
     with ProcessPoolExecutor() as executor:
         futures = set()
@@ -360,27 +371,46 @@ def wc_process_folder(main_folder:str, cpu_threshold:int):
             futures.add(initial_future)
             print(f'\tStarted process for {initial_subfolder.name}...')
 
-            # Wait for 10 seconds to measure CPU usage
-            time.sleep(10)
-            cpu_usage = get_cpu_usage()
-            print(f'\tCPU usage after 10 seconds: {cpu_usage}%')
+            # Let the worker spawn and start consuming CPU
+            time.sleep(2)
 
-            # Calculate the max number of processes based on the CPU usage threshold
-            available_cpu = cpu_threshold - cpu_usage
-            if available_cpu > 0:
-                single_process_cpu = cpu_usage  # Assume single process usage equals measured CPU usage
-                if single_process_cpu == 0:
-                    max_processes=1
-                else:
-                    max_processes = max(1, int(available_cpu / single_process_cpu) + 1)  # +1 to include the initial process
-                print(f'\tMaximum number of processes that can run: {max_processes}')
+            # Measure the WC worker(s) specifically — not system-wide CPU —
+            # so background processes (Chrome, IDE, etc.) don't inflate the
+            # estimate of a single worker's cost.
+            parent = psutil.Process(os.getpid())
+            workers = parent.children(recursive=True)
+            for w in workers:
+                try:
+                    w.cpu_percent(interval=None)  # prime; first call always returns 0.0
+                except psutil.NoSuchProcess:
+                    pass
+            time.sleep(5)
+            worker_cpu_total = 0.0
+            for w in workers:
+                try:
+                    worker_cpu_total += w.cpu_percent(interval=None)
+                except psutil.NoSuchProcess:
+                    pass
 
-                # Submit remaining subfolders based on calculated max processes
-                while subfolder_queue and len(futures) < max_processes:
-                    next_subfolder = subfolder_queue.pop(0)
-                    future = executor.submit(wc_run, next_subfolder.path)
-                    futures.add(future)
-                    print(f'\tAdded process for {next_subfolder.name}.')
+            # psutil.Process.cpu_percent returns 0..(100 * cpu_count). Divide
+            # to express as share of total system capacity (0..100).
+            worker_share = worker_cpu_total / cpu_count
+            print(f'\tSingle WC worker is using ~{worker_share:.1f}% of total CPU capacity')
+
+            if worker_share > 0:
+                max_processes = max(1, int(cpu_threshold / worker_share))
+            else:
+                # Couldn't measure (worker exited early or wasn't found yet).
+                # Fall back to slider-as-fraction-of-cores.
+                max_processes = max(1, int(cpu_count * cpu_threshold / 100))
+            print(f'\tMaximum number of processes that can run: {max_processes}')
+
+            # Submit remaining subfolders based on calculated max processes
+            while subfolder_queue and len(futures) < max_processes:
+                next_subfolder = subfolder_queue.pop(0)
+                future = executor.submit(wc_run, next_subfolder.path)
+                futures.add(future)
+                print(f'\tAdded process for {next_subfolder.name}.')
 
         # Process remaining subfolders as tasks complete
         while futures or subfolder_queue:
